@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/crc-core", "crates/crc-text"]
+members = ["crates/crc-core", "crates/crc-text", "crates/crc-theme"]
 
 [workspace.package]
 version = "0.1.0"

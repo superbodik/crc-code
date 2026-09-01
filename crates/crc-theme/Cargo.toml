@@ -1,0 +1,9 @@
+[package]
+name = "crc-theme"
+description = "Design tokens for the CRC Code editor: colours, type scale and density profiles."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
