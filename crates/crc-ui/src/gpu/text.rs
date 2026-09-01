@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crc_theme::{Rgba, Weight, typography};
+use glyphon::cosmic_text::Align;
 use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, Viewport,
@@ -13,6 +14,24 @@ use crate::geometry::Rect;
 pub enum FontKind {
     Sans,
     Mono,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TextAlign {
+    #[default]
+    Start,
+    End,
+    Center,
+}
+
+impl TextAlign {
+    fn to_cosmic(self) -> Option<Align> {
+        match self {
+            TextAlign::Start => None,
+            TextAlign::End => Some(Align::Right),
+            TextAlign::Center => Some(Align::Center),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +55,7 @@ pub struct TextRun {
     pub color: Rgba,
     pub font: FontKind,
     pub weight: Weight,
+    pub align: TextAlign,
     pub spans: Vec<Span>,
 }
 
@@ -49,8 +69,14 @@ impl TextRun {
             color,
             font: FontKind::Sans,
             weight: Weight::Regular,
+            align: TextAlign::Start,
             spans: Vec::new(),
         }
+    }
+
+    pub fn align(mut self, align: TextAlign) -> Self {
+        self.align = align;
+        self
     }
 
     pub fn mono(mut self) -> Self {
@@ -180,14 +206,15 @@ impl TextLayer {
             buffer.set_metrics(Metrics::new(run.size, run.line_height));
             buffer.set_size(Some(run.rect.width), Some(run.rect.height));
 
+            let align = run.align.to_cosmic();
             if run.spans.is_empty() {
-                buffer.set_text(&run.text, &attrs, Shaping::Advanced, None);
+                buffer.set_text(&run.text, &attrs, Shaping::Advanced, align);
             } else {
                 let pieces: Vec<(&str, Attrs)> = segments(&run.text, &run.spans, run.color)
                     .into_iter()
                     .map(|(piece, color)| (piece, attrs.clone().color(color_of(color))))
                     .collect();
-                buffer.set_rich_text(pieces, &attrs, Shaping::Advanced, None);
+                buffer.set_rich_text(pieces, &attrs, Shaping::Advanced, align);
             }
 
             buffer.shape_until_scroll(&mut self.font_system, false);

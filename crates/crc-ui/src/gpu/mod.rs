@@ -8,4 +8,4 @@ pub use context::Gpu;
 pub use frame::Frame;
 pub use offscreen::Offscreen;
 pub use quad::{Quad, QuadRenderer};
-pub use text::{FontKind, Span, TextLayer, TextRun};
+pub use text::{FontKind, Span, TextAlign, TextLayer, TextRun};
