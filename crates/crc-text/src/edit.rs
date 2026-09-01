@@ -70,4 +70,39 @@ impl Change {
             text: self.inserted.clone(),
         }
     }
+
+    /// How many characters this change added, minus what it took away.
+    pub fn delta(&self) -> isize {
+        self.inserted.chars().count() as isize - self.removed.chars().count() as isize
+    }
+}
+
+/// Move a range from the coordinates before `over` was applied into the
+/// coordinates after it.
+///
+/// `None` when the two overlap: the text the range referred to is not there
+/// any more, so no honest answer exists. Callers treat that as a conflict
+/// rather than guessing — which is what keeps a collaborative undo from
+/// silently eating someone else's edit.
+pub fn rebase(range: &Range<usize>, over: &Change) -> Option<Range<usize>> {
+    let removed_len = over.removed.chars().count();
+    let over_end = over.range.start + removed_len;
+
+    if range.end <= over.range.start {
+        // Entirely before the change.
+        return Some(range.clone());
+    }
+    if range.start >= over_end {
+        // Entirely after it: slide by the net length change.
+        let shift = over.delta();
+        let start = range.start.checked_add_signed(shift)?;
+        let end = range.end.checked_add_signed(shift)?;
+        return Some(start..end);
+    }
+    // An empty range sitting exactly on the boundary of an insertion is not a
+    // real overlap — it is a cursor, and it stays where it is.
+    if removed_len == 0 && range.is_empty() {
+        return Some(range.clone());
+    }
+    None
 }

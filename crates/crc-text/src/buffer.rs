@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use ropey::Rope;
 
+use crate::author::AuthorId;
 use crate::edit::{Change, Edit};
 use crate::history::{History, Transaction};
 use crate::point::Point;
@@ -74,6 +75,13 @@ impl Buffer {
     /// front so that the offsets in each one stay valid, which is what makes
     /// multi-cursor editing work without the caller rebasing anything.
     pub fn edit(&mut self, edits: impl IntoIterator<Item = Edit>) -> u64 {
+        self.edit_as(AuthorId::LOCAL, edits)
+    }
+
+    /// Apply edits on behalf of someone in particular — a collaborator, or the
+    /// agent. Their work groups separately in the history, so undo can take
+    /// back one author's edits without disturbing anyone else's.
+    pub fn edit_as(&mut self, author: AuthorId, edits: impl IntoIterator<Item = Edit>) -> u64 {
         let mut edits: Vec<Edit> = edits.into_iter().collect();
         if edits.is_empty() {
             return self.version;
@@ -84,13 +92,14 @@ impl Buffer {
             let edit = edits.pop().expect("one edit");
             let change = self.apply(edit.range, &edit.text);
             // Single edits feed the coalescing path, so typing undoes by word.
-            self.history.push(change);
+            self.history.push(change, author);
         } else {
             let changes = edits
                 .into_iter()
                 .map(|edit| self.apply(edit.range, &edit.text))
                 .collect();
-            self.history.push_transaction(Transaction { changes });
+            self.history
+                .push_transaction(Transaction { author, changes });
         }
 
         self.version += 1;
@@ -117,6 +126,21 @@ impl Buffer {
         self.replay(&transaction);
         self.version += 1;
         Some(self.version)
+    }
+
+    /// Step back over the newest edit by `author`, whoever has typed since.
+    ///
+    /// `None` when that author has nothing to undo, or when a later edit
+    /// touched the same text — a conflict the buffer will not guess at.
+    pub fn undo_by(&mut self, author: AuthorId) -> Option<u64> {
+        let transaction = self.history.undo_by(author)?;
+        self.replay(&transaction);
+        self.version += 1;
+        Some(self.version)
+    }
+
+    pub fn can_undo_by(&self, author: AuthorId) -> bool {
+        self.history.can_undo_by(author)
     }
 
     /// Step forward one group. `None` when there is nothing to redo.
