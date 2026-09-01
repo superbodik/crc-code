@@ -1,0 +1,24 @@
+[package]
+name = "crc-core"
+description = "Local engine for the CRC Code editor: workspace state, sandboxed filesystem, search and file watching."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+notify = "8.2.0"
+ignore = "0.4.33"
+grep-regex = "0.1.14"
+grep-searcher = "0.1.17"
+dashmap = "6.2.1"
+tempfile = "3.27.0"
+dunce = "1.0.5"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "time"] }
