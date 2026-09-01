@@ -1,11 +1,13 @@
 use crc_theme::Rgba;
 
 use crate::error::Result;
-use crate::gpu::{Gpu, Quad, QuadRenderer};
+use crate::geometry::Rect;
+use crate::gpu::{Frame, Gpu, Quad, QuadRenderer, TextLayer, TextRun};
 
 pub struct Offscreen {
     gpu: Gpu,
     quads: QuadRenderer,
+    text: TextLayer,
     texture: wgpu::Texture,
     readback: wgpu::Buffer,
     width: u32,
@@ -19,6 +21,7 @@ impl Offscreen {
     pub fn new(width: u32, height: u32) -> Result<Self> {
         let gpu = Gpu::headless()?;
         let quads = QuadRenderer::new(&gpu.device, FORMAT);
+        let text = TextLayer::new(&gpu.device, &gpu.queue, FORMAT);
 
         let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen"),
@@ -35,9 +38,8 @@ impl Offscreen {
             view_formats: &[],
         });
 
-        let unpadded = width * 4;
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let padded_bytes_per_row = unpadded.div_ceil(align) * align;
+        let padded_bytes_per_row = (width * 4).div_ceil(align) * align;
 
         let readback = gpu.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("offscreen readback"),
@@ -49,6 +51,7 @@ impl Offscreen {
         Ok(Self {
             gpu,
             quads,
+            text,
             texture,
             readback,
             width,
@@ -65,13 +68,33 @@ impl Offscreen {
         self.gpu.describe()
     }
 
+    pub fn fonts(&self) -> (&str, &str) {
+        self.text.fonts()
+    }
+
+    pub fn measure(&mut self, run: &TextRun) -> (f32, f32) {
+        self.text.measure(run)
+    }
+
     pub fn render(&mut self, background: Rgba, quads: &[Quad]) -> Vec<u8> {
+        self.render_frame(&Frame::new(background).with_quads(quads.iter().copied()))
+    }
+
+    pub fn render_frame(&mut self, frame: &Frame) -> Vec<u8> {
         self.quads.prepare(
             &self.gpu.device,
             &self.gpu.queue,
             (self.width as f32, self.height as f32),
-            quads,
+            &frame.quads,
         );
+        self.text
+            .prepare(
+                &self.gpu.device,
+                &self.gpu.queue,
+                (self.width, self.height),
+                &frame.text,
+            )
+            .expect("the text laid out");
 
         let view = self
             .texture
@@ -84,7 +107,7 @@ impl Offscreen {
             });
 
         {
-            let clear = background.to_linear();
+            let clear = frame.background.to_linear();
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("offscreen"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -107,6 +130,7 @@ impl Offscreen {
                 multiview_mask: None,
             });
             self.quads.draw(&mut pass);
+            self.text.draw(&mut pass).expect("the text drew");
         }
 
         encoder.copy_texture_to_buffer(
@@ -162,5 +186,22 @@ impl Offscreen {
             frame[index + 2],
             frame[index + 3],
         )
+    }
+
+    pub fn count_pixels(&self, frame: &[u8], area: Rect, matches: impl Fn(Rgba) -> bool) -> usize {
+        let x0 = area.x.max(0.0) as u32;
+        let y0 = area.y.max(0.0) as u32;
+        let x1 = area.right().min(self.width as f32).max(0.0) as u32;
+        let y1 = area.bottom().min(self.height as f32).max(0.0) as u32;
+
+        let mut count = 0;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                if matches(self.pixel(frame, x, y)) {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 }

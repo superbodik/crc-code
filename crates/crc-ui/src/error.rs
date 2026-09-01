@@ -10,4 +10,10 @@ pub enum UiError {
 
     #[error("the window surface could not be created")]
     Surface(#[source] wgpu::CreateSurfaceError),
+
+    #[error("text could not be laid out")]
+    TextPrepare(#[source] glyphon::PrepareError),
+
+    #[error("text could not be drawn")]
+    TextRender(#[source] glyphon::RenderError),
 }

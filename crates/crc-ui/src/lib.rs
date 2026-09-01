@@ -5,5 +5,5 @@ pub mod layout;
 
 pub use error::{Result, UiError};
 pub use geometry::Rect;
-pub use gpu::{Gpu, Offscreen, Quad, QuadRenderer};
+pub use gpu::{FontKind, Frame, Gpu, Offscreen, Quad, QuadRenderer, Span, TextLayer, TextRun};
 pub use layout::{Shell, ShellState};
