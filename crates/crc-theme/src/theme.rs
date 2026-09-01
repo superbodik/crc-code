@@ -4,11 +4,6 @@ use crate::diff::DiffTheme;
 use crate::syntax::SyntaxTheme;
 use crate::typography::TypeScale;
 
-/// Everything the renderer needs to draw the shell.
-///
-/// One value, passed down. A panel never reaches for a constant or decides its
-/// own padding, which is what keeps the profiles honest — change the density
-/// and every pane moves together.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Theme {
     pub chrome: Chrome,
@@ -16,7 +11,6 @@ pub struct Theme {
     pub diff: DiffTheme,
     pub type_scale: TypeScale,
     pub density: Density,
-    /// Zen (⌥Z): panels go away, the buffer stays.
     pub zen: bool,
 }
 
@@ -37,8 +31,6 @@ impl Theme {
         self
     }
 
-    /// Apply the editor font-size setting (12, 13, 14, 16), scaling the rest of
-    /// the scale with it so the shell keeps its proportions.
     pub fn with_code_size(mut self, size: f32) -> Self {
         let base = TypeScale::default_scale();
         self.type_scale = base.scaled(size / base.code);
@@ -49,7 +41,6 @@ impl Theme {
         self.density.metrics()
     }
 
-    /// What is on screen, after zen has had its say.
     pub fn affordances(&self) -> Affordances {
         if self.zen {
             return Affordances {

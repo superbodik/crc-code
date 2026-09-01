@@ -7,19 +7,11 @@ use crate::error::{Result, SyntaxError};
 use crate::highlight::{HighlightSpan, resolve, role_for};
 use crate::language::Language;
 
-/// A parsed buffer, kept in step with its text.
-///
-/// The tree is reused across edits: tell it what changed with
-/// [`edit`](SyntaxTree::edit) before re-parsing and tree-sitter walks only the
-/// damaged part. That is the difference between highlighting that keeps up
-/// with typing and highlighting that re-parses a 10k-line file per keystroke.
 pub struct SyntaxTree {
     language: Language,
     parser: Parser,
     query: Query,
-    /// Roles per capture index, resolved once instead of per match.
     roles: Vec<crc_theme::Highlight>,
-    /// How qualified each capture name is: `string.special.key` is 3.
     specificity: Vec<usize>,
     tree: Option<Tree>,
 }
@@ -65,16 +57,12 @@ impl SyntaxTree {
         self.tree.as_ref()
     }
 
-    /// Whether the parse hit anything it could not make sense of. Normal while
-    /// a line is half-typed; the tree is still usable.
     pub fn has_error(&self) -> bool {
         self.tree
             .as_ref()
             .is_some_and(|t| t.root_node().has_error())
     }
 
-    /// Parse `text`, reusing the previous tree when [`edit`](SyntaxTree::edit)
-    /// has described what changed.
     pub fn parse(&mut self, text: &str) -> Result<()> {
         let tree = self
             .parser
@@ -84,11 +72,6 @@ impl SyntaxTree {
         Ok(())
     }
 
-    /// Tell the tree what changed, in byte offsets, before the next parse.
-    ///
-    /// `before` and `after` are the whole text on either side of the edit —
-    /// tree-sitter wants line/column for each end, and only the text can say
-    /// where those are.
     pub fn edit(
         &mut self,
         before: &str,
@@ -110,13 +93,10 @@ impl SyntaxTree {
         });
     }
 
-    /// Highlight the whole buffer.
     pub fn highlights(&self, text: &str) -> Vec<HighlightSpan> {
         self.highlights_in(text, 0..text.len())
     }
 
-    /// Highlight one byte range — what the renderer asks for, since only the
-    /// visible lines need colouring.
     pub fn highlights_in(&self, text: &str, range: Range<usize>) -> Vec<HighlightSpan> {
         let Some(tree) = self.tree.as_ref() else {
             return Vec::new();
@@ -140,17 +120,6 @@ impl SyntaxTree {
             }
         }
 
-        // Two rules routinely claim the same node, and the grammars disagree
-        // about which should win by position: the JavaScript query opens with
-        // `(identifier) @variable` and refines it further down, while the JSON
-        // query states `@string.special.key` before the plain `(string)`.
-        // Neither "first wins" nor "last wins" satisfies both.
-        //
-        // The capture name settles it instead: the more qualified name is the
-        // more specific claim, so `string.special.key` beats `string`. Only
-        // when names are equally qualified does position decide, and there the
-        // later rule is the refinement — which is what makes a capitalised
-        // identifier a component rather than a plain variable.
         captures.sort_by(|a, b| {
             a.range
                 .start
@@ -174,7 +143,6 @@ impl std::fmt::Debug for SyntaxTree {
     }
 }
 
-/// One rule's claim on a node, before the claims are reconciled.
 struct Candidate {
     range: Range<usize>,
     role: crc_theme::Highlight,
@@ -182,7 +150,6 @@ struct Candidate {
     pattern: usize,
 }
 
-/// Line and column, in bytes, of an offset.
 fn point_at(text: &str, offset: usize) -> Point {
     let offset = offset.min(text.len());
     let before = &text[..offset];

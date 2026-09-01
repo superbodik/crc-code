@@ -1,7 +1,6 @@
 use crc_syntax::{HighlightSpan, Language, SyntaxTree, resolve, role_for};
 use crc_theme::Highlight;
 
-/// Parse and return the highlight of the first occurrence of `needle`.
 fn role_of(language: Language, source: &str, needle: &str) -> Option<Highlight> {
     let mut tree = SyntaxTree::new(language).expect("grammar loads");
     tree.parse(source).expect("parses");
@@ -40,7 +39,6 @@ fn detects_the_language_from_the_file_name() {
     );
     assert_eq!(Language::from_path("package.json"), Some(Language::Json));
 
-    // No grammar is not an error — the buffer just renders as plain text.
     assert_eq!(Language::from_path("notes.txt"), None);
     assert_eq!(Language::from_path("Makefile"), None);
 }
@@ -69,8 +67,6 @@ fn highlights_rust() {
 
 #[test]
 fn highlights_typescript_including_what_javascript_provides() {
-    // `interface` comes from the TypeScript query; `const` and the string come
-    // from the JavaScript one. Both have to be in play.
     let source = "interface Props { path: string }\nconst greeting = 'hi'\n";
 
     assert_eq!(
@@ -165,7 +161,6 @@ fn reparses_incrementally_after_an_edit() {
     let mut tree = SyntaxTree::new(Language::TypeScript).unwrap();
     tree.parse(before).unwrap();
 
-    // Insert " world" before the closing quote.
     let start = before.find("'hello").unwrap() + "'hello".len();
     tree.edit(before, after, start, start, start + " world".len());
     tree.parse(after).unwrap();

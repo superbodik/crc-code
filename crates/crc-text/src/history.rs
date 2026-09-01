@@ -1,11 +1,9 @@
 use crate::author::AuthorId;
 use crate::edit::{Change, rebase};
 
-/// A group of changes that undo and redo as one step, and who made them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     pub author: AuthorId,
-    /// In the order they were applied.
     pub changes: Vec<Change>,
 }
 
@@ -30,8 +28,6 @@ impl Transaction {
         self.changes.is_empty()
     }
 
-    /// The transaction that undoes this one: every change inverted, and
-    /// replayed back to front so each range is still valid when it is applied.
     pub fn inverted(&self) -> Transaction {
         Transaction {
             author: self.author,
@@ -39,9 +35,6 @@ impl Transaction {
         }
     }
 
-    /// Move this transaction into the coordinates that `over` left behind.
-    ///
-    /// `None` if the two touch the same text — see [`rebase`].
     pub fn rebased(&self, over: &Transaction) -> Option<Transaction> {
         let mut changes = Vec::with_capacity(self.changes.len());
         for change in &self.changes {
@@ -62,17 +55,10 @@ impl Transaction {
     }
 }
 
-/// Undo and redo stacks.
-///
-/// Consecutive typing coalesces into one transaction, so undo steps back over a
-/// word rather than one character at a time. Anything that is not a
-/// continuation of the last edit — a jump elsewhere, a deletion, a different
-/// author, an explicit [`commit`](History::commit) — closes the group.
 #[derive(Debug)]
 pub struct History {
     done: Vec<Transaction>,
     undone: Vec<Transaction>,
-    /// The group still being typed into.
     pending: Transaction,
     limit: usize,
 }
@@ -84,7 +70,6 @@ impl Default for History {
 }
 
 impl History {
-    /// `limit` caps the undo stack so a long session cannot grow without bound.
     pub fn new(limit: usize) -> Self {
         Self {
             done: Vec::new(),
@@ -102,13 +87,11 @@ impl History {
         !self.undone.is_empty()
     }
 
-    /// Whether `author` has anything left to take back.
     pub fn can_undo_by(&self, author: AuthorId) -> bool {
         (!self.pending.is_empty() && self.pending.author == author)
             || self.done.iter().any(|t| t.author == author)
     }
 
-    /// Record a change. A new edit always invalidates the redo stack.
     pub fn push(&mut self, change: Change, author: AuthorId) {
         self.undone.clear();
         if (!self.pending.is_empty() && self.pending.author != author)
@@ -118,8 +101,6 @@ impl History {
         }
         self.pending.author = author;
 
-        // A newline ends the group it belongs to, so undo takes back the line
-        // that was just typed and leaves the break above it.
         let ends_group = change.inserted.contains('\n');
         self.pending.changes.push(change);
         if ends_group {
@@ -127,8 +108,6 @@ impl History {
         }
     }
 
-    /// Record a group of changes as one indivisible undo step — a multi-cursor
-    /// edit, a formatter pass, a diff applied by an agent.
     pub fn push_transaction(&mut self, transaction: Transaction) {
         if transaction.is_empty() {
             return;
@@ -139,9 +118,6 @@ impl History {
         self.trim();
     }
 
-    /// Close the current group, so the next edit starts a fresh undo step.
-    ///
-    /// Call it when the cursor jumps, on save, or after an idle pause.
     pub fn commit(&mut self) {
         if self.pending.is_empty() {
             return;
@@ -151,7 +127,6 @@ impl History {
         self.trim();
     }
 
-    /// The transaction to apply in order to step back, if there is one.
     pub fn undo(&mut self) -> Option<Transaction> {
         self.commit();
         let transaction = self.done.pop()?;
@@ -160,14 +135,6 @@ impl History {
         Some(inverse)
     }
 
-    /// Step back over the newest edit made by `author`, whoever has typed
-    /// since.
-    ///
-    /// The inverse is moved past every transaction applied after it, so
-    /// undoing your own edit while a collaborator works further down the file
-    /// does the right thing. `None` if `author` has nothing to undo, or if a
-    /// later edit touched the same text — that is a conflict, and guessing at
-    /// it would mean quietly discarding someone else's work.
     pub fn undo_by(&mut self, author: AuthorId) -> Option<Transaction> {
         self.commit();
         let index = self.done.iter().rposition(|t| t.author == author)?;
@@ -178,13 +145,10 @@ impl History {
         }
 
         self.done.remove(index);
-        // Store the redo in the coordinates the undo is about to create, not
-        // the ones it was originally written in.
         self.undone.push(inverse.inverted());
         Some(inverse)
     }
 
-    /// The transaction to apply in order to step forward, if there is one.
     pub fn redo(&mut self) -> Option<Transaction> {
         let transaction = self.undone.pop()?;
         self.done.push(transaction.clone());
@@ -197,9 +161,6 @@ impl History {
         }
     }
 
-    /// Typing continues a group only when it is a plain insertion picking up
-    /// exactly where the last one left off. A deletion, a replacement, or a
-    /// jump elsewhere all start a new step.
     fn continues_pending(&self, change: &Change) -> bool {
         let Some(last) = self.pending.changes.last() else {
             return true;

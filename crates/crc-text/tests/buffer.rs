@@ -29,8 +29,6 @@ fn bumps_the_version_on_every_mutation() {
 fn applies_several_edits_against_the_same_snapshot() {
     let mut buffer = Buffer::from_text("one two three");
 
-    // Both ranges are stated against the original text, as a multi-cursor edit
-    // would produce them.
     buffer.edit([Edit::replace(0..3, "1"), Edit::replace(8..13, "3")]);
 
     assert_eq!(buffer.text(), "1 two 3");
@@ -67,8 +65,6 @@ fn breaks_the_undo_group_on_a_newline() {
     buffer.edit([Edit::insert(2, "\n")]);
     buffer.edit([Edit::insert(3, "cd")]);
 
-    // The newline closes its own group, so the line typed after it undoes
-    // first, leaving the break in place.
     buffer.undo();
     assert_eq!(buffer.text(), "ab\n");
 
@@ -136,9 +132,7 @@ fn converts_between_offsets_and_points() {
 fn clamps_positions_that_fall_outside_the_buffer() {
     let buffer = Buffer::from_text("one\ntwo");
 
-    // A column past the end of a line lands at the line end, not on the next.
     assert_eq!(buffer.point_to_offset(Point::new(0, 99)), 3);
-    // A line past the end lands in the last line.
     assert_eq!(buffer.point_to_offset(Point::new(99, 0)), 4);
     assert_eq!(buffer.offset_to_point(999), Point::new(1, 3));
 }
@@ -184,7 +178,6 @@ fn a_selection_keeps_its_direction() {
 fn a_selection_follows_an_edit_before_it() {
     let selection = Selection::new(10, 12);
 
-    // Two characters removed, five inserted, entirely before the selection.
     let moved = selection.shifted(&(0..2), 5);
 
     assert_eq!(moved, Selection::new(13, 15));

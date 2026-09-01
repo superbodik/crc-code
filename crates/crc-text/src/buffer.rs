@@ -7,12 +7,6 @@ use crate::edit::{Change, Edit};
 use crate::history::{History, Transaction};
 use crate::point::Point;
 
-/// An editable text buffer.
-///
-/// Text lives in a rope, so an edit in the middle of a large file costs about
-/// the same as one at the start — inserting a character into a 100k-line file
-/// does not copy the file. Every offset in this API is a character offset;
-/// [`Point`] converts to and from line/column.
 #[derive(Debug)]
 pub struct Buffer {
     rope: Rope,
@@ -33,7 +27,6 @@ impl Buffer {
         }
     }
 
-    /// Bumped on every mutation, including undo and redo.
     pub fn version(&self) -> u64 {
         self.version
     }
@@ -54,7 +47,6 @@ impl Buffer {
         self.rope.len_chars() == 0
     }
 
-    /// One line, without its trailing newline. Out-of-range lines give `None`.
     pub fn line(&self, line: usize) -> Option<String> {
         if line >= self.rope.len_lines() {
             return None;
@@ -63,24 +55,15 @@ impl Buffer {
         Some(slice.to_string().trim_end_matches(['\n', '\r']).to_string())
     }
 
-    /// The text in a character range, clamped to the buffer.
     pub fn slice(&self, range: Range<usize>) -> String {
         let range = self.clamp_range(range);
         self.rope.slice(range).to_string()
     }
 
-    /// Apply one or more edits as a single step.
-    ///
-    /// Edits are given against the *current* buffer — they are applied back to
-    /// front so that the offsets in each one stay valid, which is what makes
-    /// multi-cursor editing work without the caller rebasing anything.
     pub fn edit(&mut self, edits: impl IntoIterator<Item = Edit>) -> u64 {
         self.edit_as(AuthorId::LOCAL, edits)
     }
 
-    /// Apply edits on behalf of someone in particular — a collaborator, or the
-    /// agent. Their work groups separately in the history, so undo can take
-    /// back one author's edits without disturbing anyone else's.
     pub fn edit_as(&mut self, author: AuthorId, edits: impl IntoIterator<Item = Edit>) -> u64 {
         let mut edits: Vec<Edit> = edits.into_iter().collect();
         if edits.is_empty() {
@@ -91,7 +74,6 @@ impl Buffer {
         if edits.len() == 1 {
             let edit = edits.pop().expect("one edit");
             let change = self.apply(edit.range, &edit.text);
-            // Single edits feed the coalescing path, so typing undoes by word.
             self.history.push(change, author);
         } else {
             let changes = edits
@@ -106,8 +88,6 @@ impl Buffer {
         self.version
     }
 
-    /// Close the current undo group. Call on cursor jumps, on save, or after an
-    /// idle pause.
     pub fn commit(&mut self) {
         self.history.commit();
     }
@@ -120,7 +100,6 @@ impl Buffer {
         self.history.can_redo()
     }
 
-    /// Step back one group. `None` when there is nothing to undo.
     pub fn undo(&mut self) -> Option<u64> {
         let transaction = self.history.undo()?;
         self.replay(&transaction);
@@ -128,10 +107,6 @@ impl Buffer {
         Some(self.version)
     }
 
-    /// Step back over the newest edit by `author`, whoever has typed since.
-    ///
-    /// `None` when that author has nothing to undo, or when a later edit
-    /// touched the same text — a conflict the buffer will not guess at.
     pub fn undo_by(&mut self, author: AuthorId) -> Option<u64> {
         let transaction = self.history.undo_by(author)?;
         self.replay(&transaction);
@@ -143,7 +118,6 @@ impl Buffer {
         self.history.can_undo_by(author)
     }
 
-    /// Step forward one group. `None` when there is nothing to redo.
     pub fn redo(&mut self) -> Option<u64> {
         let transaction = self.history.redo()?;
         self.replay(&transaction);
@@ -151,9 +125,6 @@ impl Buffer {
         Some(self.version)
     }
 
-    /// Line/column to character offset. Out-of-range input clamps to the end of
-    /// the buffer rather than panicking — these values come from plugins and
-    /// agents, not just from the editor itself.
     pub fn point_to_offset(&self, point: Point) -> usize {
         let last_line = self.rope.len_lines().saturating_sub(1);
         let line = point.line.min(last_line);
@@ -165,7 +136,6 @@ impl Buffer {
         line_start + point.column.min(line_len)
     }
 
-    /// Character offset to line/column.
     pub fn offset_to_point(&self, offset: usize) -> Point {
         let offset = offset.min(self.rope.len_chars());
         let line = self.rope.char_to_line(offset);
@@ -175,7 +145,6 @@ impl Buffer {
         }
     }
 
-    /// Replace a range, returning the change that did it.
     fn apply(&mut self, range: Range<usize>, text: &str) -> Change {
         let range = self.clamp_range(range);
         let removed = self.rope.slice(range.clone()).to_string();
@@ -194,8 +163,6 @@ impl Buffer {
         }
     }
 
-    /// Apply a transaction without recording it — used by undo and redo, which
-    /// manage the stacks themselves.
     fn replay(&mut self, transaction: &Transaction) {
         for change in &transaction.changes {
             self.apply(change.range.clone(), &change.inserted);

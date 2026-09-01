@@ -10,7 +10,6 @@ use crate::fs::{self, DirEntry, FileMatches, TextQuery};
 use crate::state::{Document, Documents};
 use crate::workspace::Workspace;
 
-/// Ceilings that keep one bad request from taking the editor down.
 #[derive(Debug, Clone)]
 pub struct Limits {
     pub max_text_bytes: u64,
@@ -26,12 +25,6 @@ impl Default for Limits {
     }
 }
 
-/// The local engine: one open workspace, its buffers, and the operations over
-/// them.
-///
-/// This is the only door to the user's disk. The UI, plugins and agents are all
-/// clients of it, so the workspace sandbox and the size limits hold for every
-/// one of them - there is no second path to guard.
 pub struct Engine {
     workspace: Workspace,
     documents: Documents,
@@ -41,7 +34,6 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Open a workspace and start watching it.
     pub fn open(root: impl AsRef<Path>, limits: Limits) -> Result<Arc<Self>> {
         let workspace = Workspace::open(root)?;
         let bus = EventBus::default();
@@ -68,12 +60,10 @@ impl Engine {
         &self.documents
     }
 
-    /// Every engine event, from this moment on.
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.bus.subscribe()
     }
 
-    /// Read a file and keep it as an open buffer.
     pub async fn read_file(&self, path: impl AsRef<Path>) -> Result<Document> {
         let absolute = self.workspace.resolve(path)?;
         let text = fs::ops::read_text(&absolute, self.limits.max_text_bytes).await?;
@@ -87,12 +77,6 @@ impl Engine {
         Ok(doc)
     }
 
-    /// Write a file to disk.
-    ///
-    /// `expected_version` makes the write optimistic: pass the version the
-    /// caller last saw and the write is refused if the buffer moved since. This
-    /// is what stops an agent from pasting a diff over a file the user edited
-    /// in the meantime.
     pub async fn write_file(
         &self,
         path: impl AsRef<Path>,
@@ -158,13 +142,11 @@ impl Engine {
         Ok(())
     }
 
-    /// Content search across the workspace.
     pub async fn search_text(&self, query: TextQuery) -> Result<Vec<FileMatches>> {
         let root = self.workspace.root().to_path_buf();
         tokio::task::spawn_blocking(move || fs::search::search_text(&root, &query)).await?
     }
 
-    /// Fuzzy filename lookup.
     pub async fn find_files(&self, query: impl Into<String>, limit: usize) -> Result<Vec<PathBuf>> {
         let root = self.workspace.root().to_path_buf();
         let query = query.into();

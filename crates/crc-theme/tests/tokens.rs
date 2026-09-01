@@ -12,12 +12,9 @@ fn parses_hex_the_way_the_design_states_it() {
 
 #[test]
 fn converts_to_linear_for_the_gpu() {
-    // Pure black and white are the fixed points of the sRGB transfer curve.
     assert_eq!(Rgba::hex(0x000000).to_linear(), [0.0, 0.0, 0.0, 1.0]);
     assert_eq!(Rgba::hex(0xffffff).to_linear(), [1.0, 1.0, 1.0, 1.0]);
 
-    // Mid grey is much darker in linear space than its sRGB value suggests;
-    // getting this backwards is what makes blended edges look muddy.
     let mid = Rgba::hex(0x808080).to_linear()[0];
     assert!(mid > 0.21 && mid < 0.22, "mid grey linearised to {mid}");
 }
@@ -29,8 +26,6 @@ fn alpha_survives_the_round_trip() {
     assert!((ghost.to_linear()[3] - 128.0 / 255.0).abs() < 1e-6);
 }
 
-/// The numbers the rest of the assertions are calibrated against. Run with
-/// `--nocapture` when a token changes.
 #[test]
 fn reports_contrast() {
     let theme = Theme::light();
@@ -110,7 +105,6 @@ fn gutter_numbers_stay_quiet_but_legible() {
     let idle = theme.syntax.line_number.contrast_ratio(surface);
     assert!(idle >= 3.0, "gutter numbers are only {idle:.2}:1");
 
-    // The current line's number has to be findable at a glance.
     let active = theme.syntax.line_number_active.contrast_ratio(surface);
     assert!(active > idle * 2.0, "the active number barely stands out");
 }
@@ -125,8 +119,6 @@ fn button_labels_are_readable_on_a_filled_button() {
 #[test]
 fn accent_marks_clear_the_non_text_bar() {
     let c = Theme::light().chrome;
-    // The caret and the active-tab underline are marks, not text, so WCAG's
-    // 3:1 for non-text contrast is the bar they have to clear.
     assert!(c.accent.contrast_ratio(c.surface) >= 3.0);
 }
 
@@ -152,8 +144,6 @@ fn diff_text_is_readable_on_its_own_wash() {
 #[test]
 fn secondary_text_clears_the_lower_bar() {
     let c = Theme::light().chrome;
-    // Muted and faint carry labels and line numbers, not prose, so they are
-    // held to the large-text threshold rather than the body one.
     assert!(c.text_muted.contrast_ratio(c.surface) >= 3.0);
     assert!(c.text_faint.contrast_ratio(c.surface) >= 2.0);
 }

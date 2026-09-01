@@ -1,10 +1,3 @@
-//! Local engine for the CRC Code editor.
-//!
-//! Owns the open workspace, its buffers, and every operation that touches the
-//! user's disk. The UI, the plugin host and the AI agents are all clients of
-//! [`Engine`] - which is what makes its workspace sandbox meaningful: there is
-//! no second path to the filesystem to secure.
-
 pub mod engine;
 pub mod error;
 pub mod event;

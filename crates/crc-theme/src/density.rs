@@ -1,54 +1,36 @@
-/// How much the interface shows at once.
-///
-/// Onboarding asks the question directly — "насколько шумно должно быть?" — and
-/// the answer is one value, not a dozen toggles. Every panel reads its metrics
-/// from here, so switching profiles moves the whole shell together instead of
-/// leaving one pane at the old rhythm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Density {
-    /// One sidebar, hints on request, no popups. The learning profile.
     Calm,
     #[default]
     Balanced,
-    /// Three panels, minimap, inline diagnostics, terminal below.
     Dense,
 }
 
-/// Sizes and spacing, in logical pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Metrics {
-    /// A row in a list: file tree, search results, palette.
     pub row_height: f32,
-    /// Inside a panel, from its edge to its content.
     pub panel_padding: f32,
-    /// Between elements in a row.
     pub gap: f32,
-    /// Between sections in a panel.
     pub section_gap: f32,
 
     pub titlebar_height: f32,
     pub tabbar_height: f32,
     pub statusbar_height: f32,
     pub sidebar_width: f32,
-    /// The activity rail down the far edge.
     pub rail_width: f32,
 
     pub corner_radius: f32,
-    /// Radius for small controls: buttons, badges, chips.
     pub corner_radius_small: f32,
     pub border_width: f32,
 
-    /// Width of the gutter holding line numbers and diff marks.
     pub gutter_width: f32,
 }
 
-/// What the profile turns on, beyond the sizes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Affordances {
     pub minimap: bool,
     pub bottom_panel: bool,
     pub inline_diagnostics: bool,
-    /// Breadcrumbs above the buffer.
     pub breadcrumbs: bool,
 }
 
@@ -126,7 +108,6 @@ impl Density {
         }
     }
 
-    /// The label shown in settings and onboarding.
     pub const fn label(self) -> &'static str {
         match self {
             Density::Calm => "Спокойно",

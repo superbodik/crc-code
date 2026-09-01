@@ -1,11 +1,6 @@
 use crate::color::Rgba;
 use crate::palette;
 
-/// Colours for the diff and review views.
-///
-/// Each side gets three tones — a wash behind the line, the text itself, and a
-/// dimmed gutter number — so an added line reads as added at a glance without
-/// the background fighting the code for attention.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DiffTheme {
     pub added_background: Rgba,
@@ -18,7 +13,6 @@ pub struct DiffTheme {
     pub removed_marker: Rgba,
     pub removed_line_number: Rgba,
 
-    /// The gutter mark on a file with uncommitted changes.
     pub modified_marker: Rgba,
 }
 

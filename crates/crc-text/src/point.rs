@@ -1,10 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// A position as a human reads it: zero-based line, zero-based column.
-///
-/// Columns count characters, not bytes, so a column never lands inside a
-/// multi-byte character. Offsets used elsewhere in this crate are character
-/// offsets from the start of the buffer, for the same reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Point {

@@ -1,11 +1,3 @@
-//! Design tokens for the CRC Code editor.
-//!
-//! Taken from the design file at the root of the repository. Colours are named
-//! by role rather than by shade — a panel asks for `chrome.border`, never for a
-//! hex value — so the renderer, the syntax layer and the diff view stay in
-//! agreement, and a second theme is a new role table rather than a search
-//! through the drawing code.
-
 pub mod chrome;
 pub mod color;
 pub mod density;

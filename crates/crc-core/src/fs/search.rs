@@ -14,7 +14,6 @@ use crate::error::{CoreError, Result};
 #[serde(rename_all = "camelCase")]
 pub struct TextQuery {
     pub pattern: String,
-    /// Treat `pattern` as a regex instead of a literal string.
     #[serde(default)]
     pub is_regex: bool,
     #[serde(default)]
@@ -48,7 +47,6 @@ impl TextQuery {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileMatches {
-    /// Relative to the workspace root.
     pub path: PathBuf,
     pub matches: Vec<LineMatch>,
 }
@@ -60,9 +58,6 @@ pub struct LineMatch {
     pub text: String,
 }
 
-/// Content search across the workspace, honouring `.gitignore`.
-///
-/// Blocking and thread-parallel; call it from `spawn_blocking`.
 pub fn search_text(root: &Path, query: &TextQuery) -> Result<Vec<FileMatches>> {
     let pattern = if query.is_regex {
         query.pattern.clone()
@@ -114,7 +109,6 @@ pub fn search_text(root: &Path, query: &TextQuery) -> Result<Vec<FileMatches>> {
                     });
                     Ok(found.len() < max_per_file)
                 });
-                // A file we cannot read is skipped, not fatal to the search.
                 if searcher.search_path(&matcher, entry.path(), sink).is_err() {
                     return WalkState::Continue;
                 }
@@ -139,8 +133,6 @@ pub fn search_text(root: &Path, query: &TextQuery) -> Result<Vec<FileMatches>> {
     Ok(results)
 }
 
-/// Fuzzy filename lookup — the "go to file" palette, and how an agent locates a
-/// file it only half-remembers the name of.
 pub fn find_files(root: &Path, query: &str, limit: usize) -> Vec<PathBuf> {
     let needle = query.to_lowercase();
     let mut scored: Vec<(i32, PathBuf)> = Vec::new();
@@ -157,8 +149,6 @@ pub fn find_files(root: &Path, query: &str, limit: usize) -> Vec<PathBuf> {
         }
         let path = entry.path();
         let relative = path.strip_prefix(root).unwrap_or(path);
-        // Match against forward-slash paths on every platform, so the same
-        // query behaves the same on Windows as it does elsewhere.
         let haystack = relative
             .components()
             .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
@@ -169,8 +159,6 @@ pub fn find_files(root: &Path, query: &str, limit: usize) -> Vec<PathBuf> {
         }
     }
 
-    // Best score first; ties broken by the shorter path, which is usually the
-    // one the user meant.
     scored.sort_by(|a, b| {
         b.0.cmp(&a.0)
             .then_with(|| a.1.as_os_str().len().cmp(&b.1.as_os_str().len()))
@@ -178,8 +166,6 @@ pub fn find_files(root: &Path, query: &str, limit: usize) -> Vec<PathBuf> {
     scored.into_iter().take(limit).map(|(_, p)| p).collect()
 }
 
-/// Subsequence match, rewarding consecutive characters and matches in the
-/// basename. `None` when the needle is not a subsequence at all.
 fn fuzzy_score(haystack: &str, needle: &str) -> Option<i32> {
     if needle.is_empty() {
         return Some(0);
@@ -197,10 +183,10 @@ fn fuzzy_score(haystack: &str, needle: &str) -> Option<i32> {
         }
         score += 1;
         if last_index == Some(index.saturating_sub(1)) {
-            score += 4; // consecutive run
+            score += 4;
         }
         if index >= basename_start {
-            score += 2; // hit in the filename itself
+            score += 2;
         }
         last_index = Some(index);
         match chars.next() {
@@ -211,8 +197,6 @@ fn fuzzy_score(haystack: &str, needle: &str) -> Option<i32> {
     None
 }
 
-/// Directories that are never worth walking: huge, generated, and never what
-/// anyone is searching for.
 fn is_noise(path: &Path) -> bool {
     matches!(
         path.file_name().and_then(|n| n.to_str()),
@@ -220,7 +204,6 @@ fn is_noise(path: &Path) -> bool {
     )
 }
 
-/// Escape a literal so it can be handed to the regex engine unchanged.
 fn regex_escape(literal: &str) -> String {
     const SPECIAL: &str = r"\.+*?()|[]{}^$#&-~";
     let mut out = String::with_capacity(literal.len());

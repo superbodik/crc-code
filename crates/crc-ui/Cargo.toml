@@ -1,0 +1,19 @@
+[package]
+name = "crc-ui"
+description = "GPU renderer and shell layout for the CRC Code editor."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+crc-theme = { path = "../crc-theme" }
+crc-text = { path = "../crc-text" }
+crc-syntax = { path = "../crc-syntax" }
+thiserror.workspace = true
+tracing.workspace = true
+wgpu = "30.0.1"
+winit = "0.30.13"
+glyphon = "0.12.0"
+bytemuck = "1.25.2"
+pollster = "1.0.1"

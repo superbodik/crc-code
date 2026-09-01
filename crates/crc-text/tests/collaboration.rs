@@ -25,7 +25,6 @@ fn undo_shifts_past_edits_made_before_mine_in_the_file() {
     let mut buffer = Buffer::from_text("aaa bbb");
 
     buffer.edit_as(AuthorId::LOCAL, [Edit::insert(7, "L")]);
-    // The peer types earlier in the file, moving my text along.
     buffer.edit_as(PEER, [Edit::insert(0, "PPP")]);
     assert_eq!(buffer.text(), "PPPaaa bbbL");
 
@@ -82,7 +81,6 @@ fn typing_by_two_authors_does_not_coalesce_into_one_step() {
     buffer.edit_as(AuthorId::LOCAL, [Edit::insert(2, "c")]);
     assert_eq!(buffer.text(), "abc");
 
-    // Plain undo still walks the stack top down, one author's group at a time.
     buffer.undo();
     assert_eq!(buffer.text(), "ab");
     buffer.undo();
@@ -117,7 +115,6 @@ fn an_author_id_is_local_only_for_this_keyboard() {
     assert_ne!(AuthorId::peer(0), AuthorId::peer(1));
 }
 
-/// The transform underneath collaborative undo, on its own.
 mod rebasing {
     use super::*;
 

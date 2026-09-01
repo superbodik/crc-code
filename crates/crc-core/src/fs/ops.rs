@@ -8,15 +8,12 @@ use crate::error::{CoreError, Result};
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DirEntry {
-    /// Relative to the workspace root.
     pub path: PathBuf,
     pub name: String,
     pub is_dir: bool,
     pub size: u64,
 }
 
-/// Read a file as text. Rejects anything over `limit` or not valid UTF-8, so a
-/// stray `read_file` on a 2 GB binary cannot take the editor down.
 pub async fn read_text(path: &Path, limit: u64) -> Result<String> {
     let path = path.to_path_buf();
     tokio::task::spawn_blocking(move || {
@@ -34,10 +31,6 @@ pub async fn read_text(path: &Path, limit: u64) -> Result<String> {
     .await?
 }
 
-/// Write via a temp file in the same directory, then rename.
-///
-/// A crash mid-write leaves the previous file intact rather than a truncated
-/// one — the file an agent is editing is never left half-written.
 pub async fn write_atomic(path: &Path, contents: String) -> Result<()> {
     let path = path.to_path_buf();
     tokio::task::spawn_blocking(move || {
@@ -69,7 +62,6 @@ pub async fn list_dir(dir: &Path, root: &Path) -> Result<Vec<DirEntry>> {
             let entry = entry.map_err(|e| CoreError::io(&dir, e))?;
             let meta = match entry.metadata() {
                 Ok(meta) => meta,
-                // Vanished between listing and stat; nothing to report.
                 Err(_) => continue,
             };
             let full = entry.path();
@@ -80,7 +72,6 @@ pub async fn list_dir(dir: &Path, root: &Path) -> Result<Vec<DirEntry>> {
                 size: meta.len(),
             });
         }
-        // Directories first, then case-insensitive by name.
         entries.sort_by(|a, b| {
             b.is_dir
                 .cmp(&a.is_dir)

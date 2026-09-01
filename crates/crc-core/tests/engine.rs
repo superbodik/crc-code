@@ -3,7 +3,6 @@ use std::time::Duration;
 use crc_core::fs::TextQuery;
 use crc_core::{CoreError, Engine, Event, Limits};
 
-/// A workspace with a small tree already in it.
 fn workspace() -> (tempfile::TempDir, std::sync::Arc<Engine>) {
     let dir = tempfile::tempdir().expect("tempdir");
     let root = dir.path();
@@ -99,7 +98,6 @@ async fn refuses_a_write_against_a_stale_version() {
         .await
         .unwrap();
 
-    // An agent that read the file before that edit still holds the old version.
     let err = engine
         .write_file(
             "README.md",
