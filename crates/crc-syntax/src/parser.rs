@@ -63,6 +63,10 @@ impl SyntaxTree {
             .is_some_and(|t| t.root_node().has_error())
     }
 
+    pub fn reset(&mut self) {
+        self.tree = None;
+    }
+
     pub fn parse(&mut self, text: &str) -> Result<()> {
         let tree = self
             .parser

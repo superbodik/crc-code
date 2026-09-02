@@ -125,6 +125,33 @@ impl Buffer {
         Some(self.version)
     }
 
+    pub fn char_to_byte(&self, offset: usize) -> usize {
+        self.rope.char_to_byte(offset.min(self.rope.len_chars()))
+    }
+
+    pub fn byte_to_char(&self, byte: usize) -> usize {
+        let byte = byte.min(self.rope.len_bytes());
+        let byte = (0..=byte)
+            .rev()
+            .find(|b| self.rope.try_byte_to_char(*b).is_ok());
+        self.rope.byte_to_char(byte.unwrap_or(0))
+    }
+
+    pub fn len_bytes(&self) -> usize {
+        self.rope.len_bytes()
+    }
+
+    pub fn line_start(&self, line: usize) -> usize {
+        let line = line.min(self.rope.len_lines().saturating_sub(1));
+        self.rope.line_to_char(line)
+    }
+
+    pub fn line_len(&self, line: usize) -> usize {
+        self.line(line)
+            .map(|text| text.chars().count())
+            .unwrap_or(0)
+    }
+
     pub fn point_to_offset(&self, point: Point) -> usize {
         let last_line = self.rope.len_lines().saturating_sub(1);
         let line = point.line.min(last_line);

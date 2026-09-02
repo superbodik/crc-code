@@ -9,7 +9,7 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 [![Rust](https://img.shields.io/badge/Rust-1.96%2B-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![wgpu](https://img.shields.io/badge/wgpu-30-7c5cff)](https://wgpu.rs)
 [![tree-sitter](https://img.shields.io/badge/tree--sitter-12%20languages-4a7d5f)](https://tree-sitter.github.io)
-[![Tests](https://img.shields.io/badge/tests-180%20passing-3d6b50)](#testing)
+[![Tests](https://img.shields.io/badge/tests-233%20passing-3d6b50)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-2f6ba8)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-b0873f)]()
 
@@ -26,9 +26,9 @@ There is no browser inside it.
 The agent is **Claude Code**, not a bespoke autocomplete — the loop, the tools
 and the permissions already exist, so the editor's job is to host them well.
 
-> **Early development.** The shell renders, the workspace opens, code is
-> highlighted. Typing into the buffer is not wired up yet — see
-> [Status](#status) for exactly what works.
+> **Early development.** It opens a folder, edits and saves files, and
+> highlights twelve languages. See [Status](#status) for what is and is not
+> there yet.
 
 ## Features
 
@@ -42,6 +42,8 @@ and the permissions already exist, so the editor's job is to host them well.
 | **Sandboxed core** | Every path resolves through the workspace root, so a hallucinated `../../.ssh/id_rsa` fails before it reaches the disk |
 | **Collaboration-ready** | Edits carry an author, and undo takes back *your* last edit rather than whatever sits on top of the stack |
 | **Pixel-tested UI** | Frames render offscreen and the tests read the pixels back |
+| **Editing that keeps up** | Every keystroke re-parses incrementally, so highlighting never lags behind the text |
+| **Auto-save** | Written 800 ms after you stop typing, and on focus loss and close |
 
 ## Quick start
 
@@ -59,12 +61,22 @@ Needs a Rust toolchain (1.96+) and a GPU with Vulkan, Metal, DX12 or GL.
 
 | Key | Action |
 |---|---|
+| Typing, `Enter`, `Tab`, `Backspace`, `Delete` | Edit the buffer |
+| `Ctrl+S` | Save now — otherwise it saves itself |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo and redo |
+| `Ctrl+A` | Select all |
+| Arrows, `Home`, `End`, `PgUp`, `PgDn` | Move the cursor |
+| `Ctrl+Left` / `Ctrl+Right` | By word |
+| `Ctrl+Home` / `Ctrl+End` | To the start or end of the file |
+| `Shift` with any motion | Extend the selection |
 | `Ctrl+D` | Light and dark |
 | `Ctrl+B` | Explorer |
 | `Alt+Z` | Zen — panels go, the code stays |
-| `1` `2` `3` | Calm / Balanced / Dense |
-| `Up` `Down` `PgUp` `PgDn` | Move the cursor |
+| `Alt+1` `Alt+2` `Alt+3` | Calm / Balanced / Dense |
 | `Esc` / `Ctrl+Q` | Quit |
+
+Click in the buffer to place the caret, drag to select, and the wheel scrolls.
+Click a file in the explorer to open it.
 
 The three dots on the left close, minimize and maximize. The title bar drags
 the window; double-clicking it maximizes. The edges resize.
@@ -77,6 +89,7 @@ One responsibility per file, one subsystem per crate.
 |---|---|
 | [`crc-core`](crates/crc-core) | The workspace: sandboxed filesystem, search, file watching, open documents |
 | [`crc-text`](crates/crc-text) | The buffer: rope storage, edits, undo history, selections, authorship |
+| [`crc-editor`](crates/crc-editor) | The document: buffer, syntax tree and cursor kept in step |
 | [`crc-theme`](crates/crc-theme) | Design tokens: colours by role, type scale, density profiles |
 | [`crc-syntax`](crates/crc-syntax) | tree-sitter: incremental parsing, highlight roles, language detection |
 | [`crc-ui`](crates/crc-ui) | Layout, the GPU renderer, the frame builder, the window |
@@ -101,17 +114,19 @@ colour, ink in the buffer, the caret on the cursor line.
 **Working**
 
 - Workspace opening, gitignore-aware search, file watching
-- Rope buffer with per-author undo and multi-cursor edits
-- Incremental highlighting across 12 languages
+- Editing: typing, selection, word and line motions, undo and redo
+- Mouse: click to place the caret, drag to select, wheel to scroll, click to open a file
+- Auto-save 800 ms after the last keystroke, on focus loss and on close
+- Incremental highlighting across 12 languages, re-parsed per keystroke
 - GPU shell: title bar, rail, explorer, tabs, gutter, buffer, minimap, panel, status bar
 - Light and dark themes, three density profiles, zen mode
 - Borderless window with working controls, drag and resize
 
 **Not yet**
 
-- Typing into the buffer — the buffer renders but keys do not reach it
-- Mouse selection, wheel scrolling, opening a file from the explorer
-- Auto-save, LSP, the command palette
+- Multiple tabs, split panes, the command palette
+- Find and replace
+- LSP: diagnostics, go to definition, completion
 - The Claude Code agent panel
 - Collaborative editing over the wire (the buffer primitives are in place)
 
@@ -121,7 +136,7 @@ colour, ink in the buffer, the caret on the cursor line.
 cargo test --workspace
 ```
 
-180 tests. The interesting ones do not mock: contrast ratios are computed from
+233 tests. The interesting ones do not mock: contrast ratios are computed from
 the actual palette, grammars are loaded and real snippets parsed, and frames are
 rendered on the real GPU and read back pixel by pixel.
 

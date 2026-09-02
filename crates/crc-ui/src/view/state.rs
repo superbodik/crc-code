@@ -88,6 +88,8 @@ pub struct EditorView {
     pub focused: bool,
     pub maximized: bool,
     pub hovered_control: Option<WindowControl>,
+    pub selection: Option<Range<usize>>,
+    pub dirty: bool,
 }
 
 impl EditorView {
@@ -130,6 +132,7 @@ impl EditorView {
             text: self.text[start..end].to_string(),
             spans,
             first_line: self.scroll_line,
+            byte_start: start,
         }
     }
 }
@@ -139,6 +142,20 @@ pub struct VisibleText {
     pub text: String,
     pub spans: Vec<(Range<usize>, Highlight)>,
     pub first_line: usize,
+    pub byte_start: usize,
+}
+
+impl VisibleText {
+    pub fn local(&self, range: &Range<usize>) -> Option<Range<usize>> {
+        let end = self.byte_start + self.text.len();
+        if range.end <= self.byte_start || range.start >= end {
+            return None;
+        }
+        Some(
+            range.start.max(self.byte_start) - self.byte_start
+                ..range.end.min(end) - self.byte_start,
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

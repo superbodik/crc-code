@@ -372,6 +372,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "crc-core",
+ "crc-editor",
  "crc-syntax",
  "crc-text",
  "crc-theme",
@@ -398,6 +399,15 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "crc-editor"
+version = "0.1.0"
+dependencies = [
+ "crc-syntax",
+ "crc-text",
+ "crc-theme",
 ]
 
 [[package]]

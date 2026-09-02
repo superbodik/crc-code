@@ -1,0 +1,12 @@
+[package]
+name = "crc-editor"
+description = "The editable document for CRC Code: buffer, syntax and cursor in step."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+crc-syntax = { path = "../crc-syntax" }
+crc-text = { path = "../crc-text" }
+crc-theme = { path = "../crc-theme" }

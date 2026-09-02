@@ -4,6 +4,7 @@ use crate::geometry::Rect;
 use crate::gpu::{Frame, Quad, Span, TextAlign, TextRun};
 use crate::layout::Shell;
 use crate::view::controls::{WindowControl, control_rect};
+use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 
 pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetrics) -> Frame {
@@ -224,7 +225,7 @@ fn tabs(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
             .line_height(rect.height),
         );
 
-        if tab.modified {
+        if tab.modified || (tab.active && view.dirty) {
             frame.quad(
                 Quad::filled(
                     Rect::new(
@@ -302,6 +303,32 @@ fn editor(
             ),
             theme.syntax.current_line,
         ));
+    }
+
+    if let Some(selected) = view.selection.as_ref()
+        && let Some(local) = visible.local(selected)
+    {
+        for band in bands(&visible.text, &local) {
+            if band.row >= rows {
+                break;
+            }
+            let x = buffer.x + band.start_column as f32 * metrics.char_width;
+            let width = if band.to_line_end {
+                (band.end_column - band.start_column) as f32 * metrics.char_width
+                    + metrics.char_width * 0.6
+            } else {
+                (band.end_column - band.start_column) as f32 * metrics.char_width
+            };
+            frame.quad(Quad::filled(
+                Rect::new(
+                    x,
+                    buffer.y + band.row as f32 * metrics.line_height,
+                    width.min(buffer.right() - x),
+                    metrics.line_height,
+                ),
+                theme.syntax.selection,
+            ));
+        }
     }
 
     let numbers: String = (0..rows)
