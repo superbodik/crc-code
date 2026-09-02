@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⌘ CRC Code
+# CRC Code
 
 **A GPU-native code editor with an AI agent built in.**
 
@@ -9,7 +9,7 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 [![Rust](https://img.shields.io/badge/Rust-1.96%2B-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![wgpu](https://img.shields.io/badge/wgpu-30-7c5cff)](https://wgpu.rs)
 [![tree-sitter](https://img.shields.io/badge/tree--sitter-12%20languages-4a7d5f)](https://tree-sitter.github.io)
-[![Tests](https://img.shields.io/badge/tests-180%20passing-3d6b50)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-180%20passing-3d6b50)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-2f6ba8)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-b0873f)]()
 
@@ -17,7 +17,7 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 
 ---
 
-## ✦ What this is
+## What this is
 
 CRC Code is an editor built the way Zed is built rather than the way VS Code is:
 every pixel is drawn on the GPU, and the core that touches your disk is Rust.
@@ -26,24 +26,24 @@ There is no browser inside it.
 The agent is **Claude Code**, not a bespoke autocomplete — the loop, the tools
 and the permissions already exist, so the editor's job is to host them well.
 
-> ⚠️ **Early development.** The shell renders, the workspace opens, code is
+> **Early development.** The shell renders, the workspace opens, code is
 > highlighted. Typing into the buffer is not wired up yet — see
-> [Status](#-status) for exactly what works.
+> [Status](#status) for exactly what works.
 
-## ⚡ Features
+## Features
 
 | | |
 |---|---|
-| 🎨 **GPU renderer** | Rounded rectangles from a signed-distance field, text through `glyphon`. The whole shell is a handful of draw calls |
-| 🌗 **Light and dark** | Every colour is a role, not a hex code. Contrast is asserted by tests, not eyeballed |
-| 🧩 **12 languages** | C, C++, C#, CSS, HTML, Java, JavaScript, JSON, Python, Rust, TSX, TypeScript — parsed incrementally |
-| 🪟 **Own window chrome** | Borderless, with mac-style controls, drag, edge resize and DPI scaling |
-| 🧘 **Density profiles** | Calm, Balanced and Dense change the whole shell together. Zen hands the window to the code |
-| 🔒 **Sandboxed core** | Every path resolves through the workspace root, so a hallucinated `../../.ssh/id_rsa` fails before it reaches the disk |
-| 👥 **Collaboration-ready** | Edits carry an author, and undo takes back *your* last edit rather than whatever sits on top of the stack |
-| 🧪 **Pixel-tested UI** | Frames render offscreen and the tests read the pixels back |
+| **GPU renderer** | Rounded rectangles from a signed-distance field, text through `glyphon`. The whole shell is a handful of draw calls |
+| **Light and dark** | Every colour is a role, not a hex code. Contrast is asserted by tests, not eyeballed |
+| **12 languages** | C, C++, C#, CSS, HTML, Java, JavaScript, JSON, Python, Rust, TSX, TypeScript — parsed incrementally |
+| **Own window chrome** | Borderless, with mac-style controls, drag, edge resize and DPI scaling |
+| **Density profiles** | Calm, Balanced and Dense change the whole shell together. Zen hands the window to the code |
+| **Sandboxed core** | Every path resolves through the workspace root, so a hallucinated `../../.ssh/id_rsa` fails before it reaches the disk |
+| **Collaboration-ready** | Edits carry an author, and undo takes back *your* last edit rather than whatever sits on top of the stack |
+| **Pixel-tested UI** | Frames render offscreen and the tests read the pixels back |
 
-## 🚀 Quick start
+## Quick start
 
 ```bash
 git clone https://github.com/superbodik/crc-code
@@ -55,21 +55,21 @@ cargo run -p crc-app -- --smoke  # draws three frames and exits
 
 Needs a Rust toolchain (1.96+) and a GPU with Vulkan, Metal, DX12 or GL.
 
-## ⌨️ Keys
+## Keys
 
 | Key | Action |
 |---|---|
-| `Ctrl+D` | Light ⇄ dark |
+| `Ctrl+D` | Light and dark |
 | `Ctrl+B` | Explorer |
 | `Alt+Z` | Zen — panels go, the code stays |
 | `1` `2` `3` | Calm / Balanced / Dense |
-| `↑` `↓` `PgUp` `PgDn` | Move the cursor |
+| `Up` `Down` `PgUp` `PgDn` | Move the cursor |
 | `Esc` / `Ctrl+Q` | Quit |
 
 The three dots on the left close, minimize and maximize. The title bar drags
 the window; double-clicking it maximizes. The edges resize.
 
-## 🏗 Architecture
+## Architecture
 
 One responsibility per file, one subsystem per crate.
 
@@ -82,7 +82,7 @@ One responsibility per file, one subsystem per crate.
 | [`crc-ui`](crates/crc-ui) | Layout, the GPU renderer, the frame builder, the window |
 | [`crc-app`](crates/crc-app) | The `crc` binary: window, input, workspace session |
 
-Three ideas hold it together:
+Three ideas hold it together.
 
 **The engine is the only door to the disk.** The UI, plugins and agents are all
 clients of it, so the workspace sandbox and the size limits hold for every one
@@ -96,26 +96,26 @@ drawing code.
 no GPU involved, so the shell is asserted offscreen: each region on its own
 colour, ink in the buffer, the caret on the cursor line.
 
-## 📋 Status
+## Status
 
 **Working**
 
-- ✅ Workspace opening, gitignore-aware search, file watching
-- ✅ Rope buffer with per-author undo and multi-cursor edits
-- ✅ Incremental highlighting across 12 languages
-- ✅ GPU shell: title bar, rail, explorer, tabs, gutter, buffer, minimap, panel, status bar
-- ✅ Light and dark themes, three density profiles, zen mode
-- ✅ Borderless window with working controls, drag and resize
+- Workspace opening, gitignore-aware search, file watching
+- Rope buffer with per-author undo and multi-cursor edits
+- Incremental highlighting across 12 languages
+- GPU shell: title bar, rail, explorer, tabs, gutter, buffer, minimap, panel, status bar
+- Light and dark themes, three density profiles, zen mode
+- Borderless window with working controls, drag and resize
 
 **Not yet**
 
-- ⬜ Typing into the buffer — the buffer renders but keys do not reach it
-- ⬜ Mouse selection, wheel scrolling, opening a file from the explorer
-- ⬜ Auto-save, LSP, the command palette
-- ⬜ The Claude Code agent panel
-- ⬜ Collaborative editing over the wire (the buffer primitives are in place)
+- Typing into the buffer — the buffer renders but keys do not reach it
+- Mouse selection, wheel scrolling, opening a file from the explorer
+- Auto-save, LSP, the command palette
+- The Claude Code agent panel
+- Collaborative editing over the wire (the buffer primitives are in place)
 
-## 🧪 Testing
+## Testing
 
 ```bash
 cargo test --workspace
@@ -125,7 +125,21 @@ cargo test --workspace
 the actual palette, grammars are loaded and real snippets parsed, and frames are
 rendered on the real GPU and read back pixel by pixel.
 
-## 📄 License
+## Built with an agent
+
+Every commit here is pair-written with [Claude Code](https://claude.com/claude-code),
+and the history says so — the co-author trailer is on all of it. That is the
+point rather than a footnote: an editor that hosts an agent ought to be able to
+show what building with one actually looks like.
+
+What it looks like, concretely: the tests are the interesting part. Asserting
+contrast ratios caught four unreadable colours in the design before a line of
+the renderer existed. Reading pixels back off the GPU caught a scroll window
+that silently rendered the whole file. Parsing real snippets caught two
+grammars that disagree about which highlight rule wins. None of that is
+reachable by reading the diff.
+
+## License
 
 MIT
 
