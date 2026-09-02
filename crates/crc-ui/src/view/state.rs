@@ -2,6 +2,8 @@ use std::ops::Range;
 
 use crc_theme::Highlight;
 
+use crate::view::controls::WindowControl;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tab {
     pub name: String,
@@ -83,6 +85,9 @@ pub struct EditorView {
     pub scroll_line: usize,
     pub language: String,
     pub problems: usize,
+    pub focused: bool,
+    pub maximized: bool,
+    pub hovered_control: Option<WindowControl>,
 }
 
 impl EditorView {

@@ -34,6 +34,7 @@ impl Session {
             view: EditorView {
                 project,
                 branch: "main".to_string(),
+                focused: true,
                 ..EditorView::default()
             },
         };

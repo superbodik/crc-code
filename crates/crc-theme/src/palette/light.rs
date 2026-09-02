@@ -45,5 +45,9 @@ pub const AMBER_600: Rgba = Rgba::hex(0x896931);
 
 pub const BLUE_500: Rgba = Rgba::hex(0x2f6ba8);
 
+pub const TRAFFIC_RED: Rgba = Rgba::hex(0xec6a5e);
+pub const TRAFFIC_AMBER: Rgba = Rgba::hex(0xf4bf4f);
+pub const TRAFFIC_GREEN: Rgba = Rgba::hex(0x61c454);
+
 pub const VIOLET_500: Rgba = Rgba::hex(0x8a5bd0);
 pub const VIOLET_600: Rgba = Rgba::hex(0x8457c8);

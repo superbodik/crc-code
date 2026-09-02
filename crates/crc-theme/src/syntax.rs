@@ -36,20 +36,39 @@ pub struct SyntaxTheme {
 impl SyntaxTheme {
     pub const fn light() -> Self {
         Self {
-            text: palette::NEUTRAL_850,
-            keyword: palette::VIOLET_600,
-            function: palette::BLUE_500,
-            parameter: palette::AMBER_600,
-            string: palette::GREEN_600,
-            number: palette::GREEN_600,
-            comment: palette::NEUTRAL_700,
-            punctuation: palette::NEUTRAL_800,
-            line_number: palette::NEUTRAL_600,
-            line_number_active: palette::NEUTRAL_850,
-            current_line: palette::NEUTRAL_100,
-            selection: palette::ACCENT_100,
-            caret: palette::ACCENT_500,
-            peer_caret: palette::ACCENT_400,
+            text: palette::light::NEUTRAL_850,
+            keyword: palette::light::VIOLET_600,
+            function: palette::light::BLUE_500,
+            parameter: palette::light::AMBER_600,
+            string: palette::light::GREEN_600,
+            number: palette::light::GREEN_600,
+            comment: palette::light::NEUTRAL_700,
+            punctuation: palette::light::NEUTRAL_800,
+            line_number: palette::light::NEUTRAL_600,
+            line_number_active: palette::light::NEUTRAL_850,
+            current_line: palette::light::NEUTRAL_100,
+            selection: palette::light::ACCENT_100,
+            caret: palette::light::ACCENT_500,
+            peer_caret: palette::light::ACCENT_400,
+        }
+    }
+
+    pub const fn dark() -> Self {
+        Self {
+            text: palette::dark::NEUTRAL_850,
+            keyword: palette::dark::VIOLET_500,
+            function: palette::dark::BLUE_500,
+            parameter: palette::dark::AMBER_500,
+            string: palette::dark::GREEN_500,
+            number: palette::dark::GREEN_500,
+            comment: palette::dark::NEUTRAL_600,
+            punctuation: palette::dark::NEUTRAL_800,
+            line_number: palette::dark::NEUTRAL_550,
+            line_number_active: palette::dark::NEUTRAL_850,
+            current_line: palette::dark::NEUTRAL_150,
+            selection: palette::dark::ACCENT_100,
+            caret: palette::dark::ACCENT_500,
+            peer_caret: palette::dark::ACCENT_400,
         }
     }
 

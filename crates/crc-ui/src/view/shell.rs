@@ -1,8 +1,9 @@
-use crc_theme::{Rgba, Theme, Weight};
+use crc_theme::{CONTROL_RING, Rgba, Theme, Weight};
 
 use crate::geometry::Rect;
 use crate::gpu::{Frame, Quad, Span, TextAlign, TextRun};
 use crate::layout::Shell;
+use crate::view::controls::{WindowControl, control_rect};
 use crate::view::state::{CodeMetrics, EditorView};
 
 pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetrics) -> Frame {
@@ -43,18 +44,27 @@ fn titlebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView)
     frame.quad(Quad::filled(bar, theme.chrome.panel));
     hairline_bottom(frame, bar, theme.chrome.border);
 
-    for index in 0..3 {
+    for control in WindowControl::ALL {
+        let rect = control_rect(bar, control);
+        let fill = if view.focused {
+            match control {
+                WindowControl::Close => theme.chrome.control_close,
+                WindowControl::Minimize => theme.chrome.control_minimize,
+                WindowControl::Maximize => theme.chrome.control_maximize,
+            }
+        } else {
+            theme.chrome.control_idle
+        };
+        let fill = if view.hovered_control == Some(control) {
+            fill.shade(0.12)
+        } else {
+            fill
+        };
+
         frame.quad(
-            Quad::filled(
-                Rect::new(
-                    14.0 + index as f32 * 18.0,
-                    bar.y + bar.height / 2.0 - 5.5,
-                    11.0,
-                    11.0,
-                ),
-                theme.chrome.selected,
-            )
-            .rounded(5.5),
+            Quad::filled(rect, fill)
+                .rounded(rect.width / 2.0)
+                .bordered(1.0, fill.shade(CONTROL_RING)),
         );
     }
 

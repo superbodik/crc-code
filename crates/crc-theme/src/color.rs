@@ -38,6 +38,16 @@ impl Rgba {
         ]
     }
 
+    pub fn shade(self, amount: f32) -> Rgba {
+        let keep = 1.0 - amount.clamp(0.0, 1.0);
+        Rgba::new(
+            (self.r as f32 * keep).round() as u8,
+            (self.g as f32 * keep).round() as u8,
+            (self.b as f32 * keep).round() as u8,
+            self.a,
+        )
+    }
+
     pub fn relative_luminance(self) -> f32 {
         0.2126 * srgb_to_linear(self.r)
             + 0.7152 * srgb_to_linear(self.g)

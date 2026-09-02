@@ -7,10 +7,10 @@ pub mod syntax;
 pub mod theme;
 pub mod typography;
 
-pub use chrome::Chrome;
+pub use chrome::{CONTROL_RING, Chrome};
 pub use color::Rgba;
 pub use density::{Affordances, Density, Metrics};
 pub use diff::DiffTheme;
 pub use syntax::{Highlight, SyntaxTheme};
-pub use theme::Theme;
+pub use theme::{Appearance, Theme};
 pub use typography::{TypeScale, Weight};

@@ -6,3 +6,8 @@ dist/
 !.env.example
 *.log
 .DS_Store
+
+CRC Code.dc.html
+support.js
+TASK.md
+ROADMAP.md

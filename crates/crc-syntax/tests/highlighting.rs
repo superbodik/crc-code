@@ -287,3 +287,117 @@ mod flattening {
         assert!(resolve(Vec::new()).is_empty());
     }
 }
+
+#[test]
+fn detects_the_languages_added_for_the_wider_set() {
+    for (name, language) in [
+        ("Main.java", Language::Java),
+        ("engine.cpp", Language::Cpp),
+        ("render.hpp", Language::Cpp),
+        ("shim.c", Language::C),
+        ("shim.h", Language::C),
+        ("Program.cs", Language::CSharp),
+        ("train.py", Language::Python),
+        ("index.html", Language::Html),
+        ("theme.css", Language::Css),
+    ] {
+        assert_eq!(Language::from_path(name), Some(language), "{name}");
+    }
+}
+
+#[test]
+fn every_language_has_a_display_name_and_a_working_grammar() {
+    for language in Language::ALL {
+        assert!(!language.name().is_empty());
+        SyntaxTree::new(*language)
+            .unwrap_or_else(|e| panic!("{} failed to load: {e}", language.name()));
+    }
+}
+
+#[test]
+fn highlights_java() {
+    let source = "public class Editor {\n  private int size = 12;\n}\n";
+    assert_eq!(
+        role_of(Language::Java, source, "class"),
+        Some(Highlight::Keyword)
+    );
+    assert_eq!(
+        role_of(Language::Java, source, "12"),
+        Some(Highlight::Number)
+    );
+}
+
+#[test]
+fn highlights_cpp_including_what_c_provides() {
+    let source = "#include <vector>\nnamespace crc {\n  int size = 12;\n}\n";
+    assert_eq!(
+        role_of(Language::Cpp, source, "namespace"),
+        Some(Highlight::Keyword),
+        "namespace comes from the c++ query"
+    );
+    assert_eq!(
+        role_of(Language::Cpp, source, "int"),
+        Some(Highlight::Function),
+        "int comes from the c query, and a primitive type shares the blue of type names"
+    );
+}
+
+#[test]
+fn highlights_c() {
+    let source = "int main(void) {\n  return 0;\n}\n";
+    assert_eq!(
+        role_of(Language::C, source, "int"),
+        Some(Highlight::Function),
+        "a primitive type is a type, and types share the blue of function names"
+    );
+    assert_eq!(
+        role_of(Language::C, source, "return"),
+        Some(Highlight::Keyword)
+    );
+    assert_eq!(role_of(Language::C, source, "0"), Some(Highlight::Number));
+}
+
+#[test]
+fn highlights_csharp() {
+    let source = "public class Editor {\n  string path = \"src\";\n}\n";
+    assert_eq!(
+        role_of(Language::CSharp, source, "class"),
+        Some(Highlight::Keyword)
+    );
+    assert_eq!(
+        role_of(Language::CSharp, source, "\"src\""),
+        Some(Highlight::String)
+    );
+}
+
+#[test]
+fn highlights_python() {
+    let source = "def render(path):\n    return open(path)  # note\n";
+    assert_eq!(
+        role_of(Language::Python, source, "def"),
+        Some(Highlight::Keyword)
+    );
+    assert_eq!(
+        role_of(Language::Python, source, "# note"),
+        Some(Highlight::Comment)
+    );
+}
+
+#[test]
+fn highlights_css() {
+    let source = ".editor {\n  color: #7c5cff;\n}\n";
+    assert!(
+        role_of(Language::Css, source, "color").is_some(),
+        "the property should carry a role"
+    );
+}
+
+#[test]
+fn highlights_html() {
+    let source = "<div class=\"editor\">code</div>\n";
+    assert_eq!(
+        role_of(Language::Html, source, "div"),
+        Some(Highlight::Function),
+        "tags read as the blue the design gives component names"
+    );
+}

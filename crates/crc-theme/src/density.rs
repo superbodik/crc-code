@@ -34,6 +34,26 @@ pub struct Affordances {
     pub breadcrumbs: bool,
 }
 
+impl Metrics {
+    pub fn scaled(self, factor: f32) -> Metrics {
+        Metrics {
+            row_height: self.row_height * factor,
+            panel_padding: self.panel_padding * factor,
+            gap: self.gap * factor,
+            section_gap: self.section_gap * factor,
+            titlebar_height: self.titlebar_height * factor,
+            tabbar_height: self.tabbar_height * factor,
+            statusbar_height: self.statusbar_height * factor,
+            sidebar_width: self.sidebar_width * factor,
+            rail_width: self.rail_width * factor,
+            corner_radius: self.corner_radius * factor,
+            corner_radius_small: self.corner_radius_small * factor,
+            border_width: self.border_width * factor,
+            gutter_width: self.gutter_width * factor,
+        }
+    }
+}
+
 impl Density {
     pub const fn metrics(self) -> Metrics {
         match self {

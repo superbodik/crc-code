@@ -40,6 +40,9 @@ fn view() -> EditorView {
         scroll_line: 0,
         language: "TypeScript".to_string(),
         problems: 2,
+        focused: true,
+        maximized: false,
+        hovered_control: None,
     }
 }
 
@@ -299,5 +302,130 @@ mod scrolling {
         assert_eq!(visible.spans.len(), 1);
         assert_eq!(visible.spans[0].0.start, 0);
         assert!(visible.spans[0].0.end <= visible.text.len());
+    }
+}
+
+mod window_controls {
+    use super::*;
+    use crc_ui::{WindowControl, control_rect};
+
+    fn dot(canvas: &Offscreen, pixels: &[u8], layout: &Shell, control: WindowControl) -> Rgba {
+        let rect = control_rect(layout.titlebar, control);
+        canvas.pixel(
+            pixels,
+            (rect.x + rect.width / 2.0) as u32,
+            (rect.y + rect.height / 2.0) as u32,
+        )
+    }
+
+    #[test]
+    fn a_focused_window_shows_the_three_colours() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::light();
+        let layout = layout(&theme);
+
+        let pixels = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &view(),
+            CodeMetrics::default(),
+        ));
+
+        assert!(near(
+            dot(&canvas, &pixels, &layout, WindowControl::Close),
+            theme.chrome.control_close
+        ));
+        assert!(near(
+            dot(&canvas, &pixels, &layout, WindowControl::Minimize),
+            theme.chrome.control_minimize
+        ));
+        assert!(near(
+            dot(&canvas, &pixels, &layout, WindowControl::Maximize),
+            theme.chrome.control_maximize
+        ));
+    }
+
+    #[test]
+    fn an_unfocused_window_greys_them_out() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::light();
+        let layout = layout(&theme);
+        let mut state = view();
+        state.focused = false;
+
+        let pixels =
+            canvas.render_frame(&view::draw(&layout, &theme, &state, CodeMetrics::default()));
+
+        for control in WindowControl::ALL {
+            assert!(
+                near(
+                    dot(&canvas, &pixels, &layout, control),
+                    theme.chrome.control_idle
+                ),
+                "{control:?} stayed coloured while the window was not focused"
+            );
+        }
+    }
+
+    #[test]
+    fn hovering_darkens_only_the_dot_under_the_pointer() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::light();
+        let layout = layout(&theme);
+
+        let plain = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &view(),
+            CodeMetrics::default(),
+        ));
+        let mut hovered = view();
+        hovered.hovered_control = Some(WindowControl::Close);
+        let lit = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &hovered,
+            CodeMetrics::default(),
+        ));
+
+        let before = dot(&canvas, &plain, &layout, WindowControl::Close);
+        let after = dot(&canvas, &lit, &layout, WindowControl::Close);
+        assert!(
+            after.relative_luminance() < before.relative_luminance(),
+            "hover did not darken the close button"
+        );
+
+        assert_eq!(
+            dot(&canvas, &plain, &layout, WindowControl::Maximize),
+            dot(&canvas, &lit, &layout, WindowControl::Maximize),
+            "the other buttons should not react"
+        );
+    }
+
+    #[test]
+    fn the_dark_theme_draws_the_shell_too() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::dark();
+        let layout = layout(&theme);
+
+        let pixels = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &view(),
+            CodeMetrics::default(),
+        ));
+
+        assert!(near(
+            canvas.pixel(&pixels, WIDTH - 20, (layout.titlebar.height / 2.0) as u32),
+            theme.chrome.panel
+        ));
+        assert!(
+            canvas.count_pixels(&pixels, layout.buffer, |c| !near(c, theme.chrome.surface)) > 200,
+            "the code did not render on the dark theme"
+        );
+        assert!(near(
+            dot(&canvas, &pixels, &layout, WindowControl::Close),
+            theme.chrome.control_close
+        ));
     }
 }
