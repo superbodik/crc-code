@@ -8,6 +8,8 @@ pub struct Offscreen {
     gpu: Gpu,
     quads: QuadRenderer,
     text: TextLayer,
+    overlay_quads: QuadRenderer,
+    overlay_text: TextLayer,
     texture: wgpu::Texture,
     readback: wgpu::Buffer,
     width: u32,
@@ -22,6 +24,8 @@ impl Offscreen {
         let gpu = Gpu::headless()?;
         let quads = QuadRenderer::new(&gpu.device, FORMAT);
         let text = TextLayer::new(&gpu.device, &gpu.queue, FORMAT);
+        let overlay_quads = QuadRenderer::new(&gpu.device, FORMAT);
+        let overlay_text = TextLayer::new(&gpu.device, &gpu.queue, FORMAT);
 
         let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen"),
@@ -52,6 +56,8 @@ impl Offscreen {
             gpu,
             quads,
             text,
+            overlay_quads,
+            overlay_text,
             texture,
             readback,
             width,
@@ -81,20 +87,35 @@ impl Offscreen {
     }
 
     pub fn render_frame(&mut self, frame: &Frame) -> Vec<u8> {
+        let screen = (self.width as f32, self.height as f32);
         self.quads.prepare(
             &self.gpu.device,
             &self.gpu.queue,
-            (self.width as f32, self.height as f32),
-            &frame.quads,
+            screen,
+            &frame.shell.quads,
         );
         self.text
             .prepare(
                 &self.gpu.device,
                 &self.gpu.queue,
                 (self.width, self.height),
-                &frame.text,
+                &frame.shell.text,
             )
             .expect("the text laid out");
+        self.overlay_quads.prepare(
+            &self.gpu.device,
+            &self.gpu.queue,
+            screen,
+            &frame.overlay.quads,
+        );
+        self.overlay_text
+            .prepare(
+                &self.gpu.device,
+                &self.gpu.queue,
+                (self.width, self.height),
+                &frame.overlay.text,
+            )
+            .expect("the overlay text laid out");
 
         let view = self
             .texture
@@ -131,6 +152,8 @@ impl Offscreen {
             });
             self.quads.draw(&mut pass);
             self.text.draw(&mut pass).expect("the text drew");
+            self.overlay_quads.draw(&mut pass);
+            self.overlay_text.draw(&mut pass).expect("the overlay drew");
         }
 
         encoder.copy_texture_to_buffer(

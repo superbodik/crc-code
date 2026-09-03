@@ -44,6 +44,7 @@ fn view() -> EditorView {
         maximized: false,
         hovered_control: None,
         hovered_tab: None,
+        palette: None,
         selection: None,
         dirty: false,
     }

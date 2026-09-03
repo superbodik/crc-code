@@ -11,6 +11,8 @@ pub struct WindowRenderer {
     config: wgpu::SurfaceConfiguration,
     quads: QuadRenderer,
     text: TextLayer,
+    overlay_quads: QuadRenderer,
+    overlay_text: TextLayer,
 }
 
 impl WindowRenderer {
@@ -45,6 +47,8 @@ impl WindowRenderer {
 
         let quads = QuadRenderer::new(&gpu.device, format);
         let text = TextLayer::new(&gpu.device, &gpu.queue, format);
+        let overlay_quads = QuadRenderer::new(&gpu.device, format);
+        let overlay_text = TextLayer::new(&gpu.device, &gpu.queue, format);
 
         Ok(Self {
             gpu,
@@ -52,6 +56,8 @@ impl WindowRenderer {
             config,
             quads,
             text,
+            overlay_quads,
+            overlay_text,
         })
     }
 
@@ -97,13 +103,27 @@ impl WindowRenderer {
         };
 
         let screen = (self.config.width as f32, self.config.height as f32);
-        self.quads
-            .prepare(&self.gpu.device, &self.gpu.queue, screen, &frame.quads);
-        self.text.prepare(
+        let pixels = (self.config.width, self.config.height);
+
+        self.quads.prepare(
             &self.gpu.device,
             &self.gpu.queue,
-            (self.config.width, self.config.height),
-            &frame.text,
+            screen,
+            &frame.shell.quads,
+        );
+        self.text
+            .prepare(&self.gpu.device, &self.gpu.queue, pixels, &frame.shell.text)?;
+        self.overlay_quads.prepare(
+            &self.gpu.device,
+            &self.gpu.queue,
+            screen,
+            &frame.overlay.quads,
+        );
+        self.overlay_text.prepare(
+            &self.gpu.device,
+            &self.gpu.queue,
+            pixels,
+            &frame.overlay.text,
         )?;
 
         let view = surface_texture
@@ -141,6 +161,8 @@ impl WindowRenderer {
             });
             self.quads.draw(&mut pass);
             self.text.draw(&mut pass)?;
+            self.overlay_quads.draw(&mut pass);
+            self.overlay_text.draw(&mut pass)?;
         }
 
         self.gpu.queue.submit(Some(encoder.finish()));

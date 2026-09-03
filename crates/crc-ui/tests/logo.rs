@@ -86,8 +86,8 @@ fn a_zero_sized_mark_draws_nothing() {
     let mut frame = Frame::new(Rgba::hex(0xffffff));
     logo::draw(&mut frame, logo::mark(0.0, 10.0, 10.0), Brand::colour());
 
-    assert!(frame.quads.is_empty());
-    assert!(frame.text.is_empty());
+    assert!(frame.quads().is_empty());
+    assert!(frame.runs().is_empty());
 }
 
 #[test]

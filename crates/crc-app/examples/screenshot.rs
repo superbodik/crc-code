@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crc_app::Session;
 use crc_theme::{Appearance, Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
+use crc_ui::view::palette::{self, Action, PaletteView};
 use crc_ui::view::{self, CodeMetrics};
 use crc_ui::{Offscreen, Shell, ShellState, TextRun};
 
@@ -33,12 +34,24 @@ fn main() -> anyhow::Result<()> {
     let mut canvas = Offscreen::new(WIDTH, HEIGHT)?;
     println!("rendering on {}", canvas.adapter());
 
-    for (name, appearance, density, zen) in [
-        ("dark", Appearance::Dark, Density::Balanced, false),
-        ("light", Appearance::Light, Density::Balanced, false),
-        ("zen", Appearance::Dark, Density::Balanced, true),
-        ("dense", Appearance::Dark, Density::Dense, false),
+    for (name, appearance, density, zen, query) in [
+        ("dark", Appearance::Dark, Density::Balanced, false, None),
+        ("light", Appearance::Light, Density::Balanced, false, None),
+        ("zen", Appearance::Dark, Density::Balanced, true, None),
+        ("dense", Appearance::Dark, Density::Dense, false, None),
+        (
+            "palette",
+            Appearance::Dark,
+            Density::Balanced,
+            false,
+            Some("тем"),
+        ),
     ] {
+        session.view.palette = query.map(|text| PaletteView {
+            query: text.to_string(),
+            rows: palette::filter(&actions(), text),
+            selected: 0,
+        });
         let mut theme = Theme::new(appearance).with_density(density);
         theme.zen = zen;
 
@@ -69,6 +82,19 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn actions() -> Vec<Action> {
+    vec![
+        Action::new("save", "Сохранить файл", "Файл").hint("Ctrl+S"),
+        Action::new("close-tab", "Закрыть вкладку", "Файл").hint("Ctrl+W"),
+        Action::new("undo", "Отменить правку", "Правка").hint("Ctrl+Z"),
+        Action::new("select-all", "Выделить всё", "Правка").hint("Ctrl+A"),
+        Action::new("theme", "Переключить светлую и тёмную тему", "Вид").hint("Ctrl+D"),
+        Action::new("sidebar", "Показать или скрыть проводник", "Вид").hint("Ctrl+B"),
+        Action::new("zen", "Zen — оставить только код", "Вид").hint("Alt+Z"),
+        Action::new("dense", "Плотность: максимум мощи", "Вид").hint("Alt+3"),
+    ]
 }
 
 fn write_png(path: &Path, width: u32, height: u32, pixels: &[u8]) -> anyhow::Result<()> {

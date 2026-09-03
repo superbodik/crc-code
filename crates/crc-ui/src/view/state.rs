@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crc_theme::Highlight;
 
 use crate::view::controls::WindowControl;
+use crate::view::palette::PaletteView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tab {
@@ -98,6 +99,7 @@ pub struct EditorView {
     pub maximized: bool,
     pub hovered_control: Option<WindowControl>,
     pub hovered_tab: Option<usize>,
+    pub palette: Option<PaletteView>,
     pub selection: Option<Range<usize>>,
     pub dirty: bool,
 }

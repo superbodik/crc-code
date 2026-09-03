@@ -4,12 +4,14 @@ use std::time::{Duration, Instant};
 use crc_editor::{AUTOSAVE_IDLE_MS, Motion};
 use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
-use crc_ui::view::{self, CodeMetrics, Edge, TabHit, WindowControl, tabs};
+use crc_ui::view::{
+    self, Action, CodeMetrics, Edge, PaletteView, TabHit, WindowControl, palette, tabs,
+};
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{Key, ModifiersState};
+use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{CursorIcon, ResizeDirection, Window, WindowId};
 
 use crate::input::{Command, density_shortcut, resolve};
@@ -30,6 +32,7 @@ pub struct App {
     last_edit: Option<Instant>,
     window: Option<Arc<Window>>,
     renderer: Option<WindowRenderer>,
+    actions: Vec<Action>,
     frames: u32,
     smoke: bool,
 }
@@ -48,6 +51,7 @@ impl App {
             last_edit: None,
             window: None,
             renderer: None,
+            actions: actions(),
             frames: 0,
             smoke,
         }
@@ -124,6 +128,7 @@ impl App {
                 self.session.save_all();
                 event_loop.exit();
             }
+            Command::OpenPalette => self.toggle_palette(),
             Command::CloseTab => {
                 if let Some(index) = self.session.active_tab() {
                     self.session.close_tab(index);
@@ -285,6 +290,21 @@ impl App {
     fn press(&mut self, event_loop: &ActiveEventLoop) {
         let (x, y) = self.cursor;
         let layout = self.layout();
+
+        if let Some(state) = self.session.view.palette.as_ref() {
+            let window = Rect::from_size(layout.titlebar.width, self.window_rect().height);
+            let panel = palette::frame(window, state.rows.len(), self.theme.scale);
+            let chosen = palette::row_at(panel, state.rows.len(), self.theme.scale, x, y)
+                .and_then(|index| state.rows.get(index).map(|row| row.id));
+
+            self.session.view.palette = None;
+            if let Some(id) = chosen
+                && let Some(command) = command_for_action(id)
+            {
+                self.apply(command, event_loop);
+            }
+            return;
+        }
 
         let Some(window) = self.window.as_ref() else {
             return;
@@ -507,7 +527,9 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                if let Some(command) = self.command_for(&logical_key) {
+                if self.session.view.palette.is_some() {
+                    self.palette_key(&logical_key, event_loop);
+                } else if let Some(command) = self.command_for(&logical_key) {
                     self.apply(command, event_loop);
                 }
                 self.request_redraw();
@@ -533,4 +555,116 @@ impl App {
     fn command_for(&self, key: &Key) -> Option<Command> {
         density_shortcut(key, self.modifiers).or_else(|| resolve(key, self.modifiers, self.rows()))
     }
+}
+
+impl App {
+    fn toggle_palette(&mut self) {
+        self.session.view.palette = match self.session.view.palette {
+            Some(_) => None,
+            None => Some(PaletteView {
+                query: String::new(),
+                rows: palette::filter(&self.actions, ""),
+                selected: 0,
+            }),
+        };
+    }
+
+    fn refilter(&mut self) {
+        let Some(state) = self.session.view.palette.as_mut() else {
+            return;
+        };
+        state.rows = palette::filter(&self.actions, &state.query);
+        state.selected = 0;
+    }
+
+    fn palette_key(&mut self, key: &Key, event_loop: &ActiveEventLoop) {
+        let control = self.modifiers.control_key();
+
+        match key {
+            Key::Named(NamedKey::Escape) => self.session.view.palette = None,
+            Key::Named(NamedKey::ArrowDown) => {
+                if let Some(state) = self.session.view.palette.as_mut() {
+                    state.move_selection(1);
+                }
+            }
+            Key::Named(NamedKey::ArrowUp) => {
+                if let Some(state) = self.session.view.palette.as_mut() {
+                    state.move_selection(-1);
+                }
+            }
+            Key::Named(NamedKey::Enter) => {
+                let chosen = self
+                    .session
+                    .view
+                    .palette
+                    .as_ref()
+                    .and_then(|state| state.selected_id());
+                self.session.view.palette = None;
+                if let Some(id) = chosen
+                    && let Some(command) = command_for_action(id)
+                {
+                    self.apply(command, event_loop);
+                }
+            }
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(state) = self.session.view.palette.as_mut() {
+                    state.query.pop();
+                }
+                self.refilter();
+            }
+            Key::Named(NamedKey::Space) if !control => {
+                if let Some(state) = self.session.view.palette.as_mut() {
+                    state.query.push(' ');
+                }
+                self.refilter();
+            }
+            Key::Character(text) if control => {
+                if matches!(text.to_lowercase().as_str(), "k" | "л") {
+                    self.session.view.palette = None;
+                }
+            }
+            Key::Character(text) => {
+                if let Some(state) = self.session.view.palette.as_mut() {
+                    state.query.push_str(text);
+                }
+                self.refilter();
+            }
+            _ => {}
+        }
+    }
+}
+
+fn actions() -> Vec<Action> {
+    vec![
+        Action::new("save", "Сохранить файл", "Файл").hint("Ctrl+S"),
+        Action::new("close-tab", "Закрыть вкладку", "Файл").hint("Ctrl+W"),
+        Action::new("undo", "Отменить правку", "Правка").hint("Ctrl+Z"),
+        Action::new("redo", "Вернуть правку", "Правка").hint("Ctrl+Shift+Z"),
+        Action::new("select-all", "Выделить всё", "Правка").hint("Ctrl+A"),
+        Action::new("theme", "Переключить светлую и тёмную тему", "Вид").hint("Ctrl+D"),
+        Action::new("sidebar", "Показать или скрыть проводник", "Вид").hint("Ctrl+B"),
+        Action::new("zen", "Zen — оставить только код", "Вид").hint("Alt+Z"),
+        Action::new("calm", "Плотность: спокойно", "Вид").hint("Alt+1"),
+        Action::new("balanced", "Плотность: сбалансированно", "Вид").hint("Alt+2"),
+        Action::new("dense", "Плотность: максимум мощи", "Вид").hint("Alt+3"),
+        Action::new("quit", "Выйти из редактора", "Файл").hint("Ctrl+Q"),
+    ]
+}
+
+fn command_for_action(id: &str) -> Option<Command> {
+    Some(match id {
+        "save" => Command::Save,
+        "close-tab" => Command::CloseTab,
+        "undo" => Command::Undo,
+        "redo" => Command::Redo,
+        "select-all" => Command::SelectAll,
+        "theme" => Command::ToggleAppearance,
+        "sidebar" => Command::ToggleSidebar,
+        "zen" => Command::ToggleZen,
+        "calm" => Command::Density(1),
+        "balanced" => Command::Density(2),
+        "dense" => Command::Density(3),
+        "quit" => Command::Quit,
+        _ => return None,
+    })
 }

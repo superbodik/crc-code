@@ -5,6 +5,7 @@ use crate::gpu::{Frame, Quad, Span, TextAlign, TextRun};
 use crate::layout::Shell;
 use crate::view::controls::{WindowControl, control_rect};
 use crate::view::logo;
+use crate::view::palette;
 use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 use crate::view::tabs;
@@ -22,6 +23,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     panel(&mut frame, layout, theme);
     aside(&mut frame, layout, theme);
     statusbar(&mut frame, layout, theme, view);
+    command_palette(&mut frame, layout, theme, view);
 
     frame
 }
@@ -538,3 +540,190 @@ fn statusbar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView
         .line_height(bar.height),
     );
 }
+
+fn command_palette(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.palette.as_ref() else {
+        return;
+    };
+
+    let window = Rect::new(
+        0.0,
+        0.0,
+        layout.titlebar.width,
+        layout
+            .statusbar
+            .map(|bar| bar.bottom())
+            .unwrap_or(layout.buffer.bottom()),
+    );
+    let scale = theme.scale;
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+
+    frame.overlay_quad(Quad::filled(window, theme.chrome.backdrop.with_alpha(150)));
+
+    let panel = palette::frame(window, state.rows.len(), scale);
+    frame.overlay_quad(
+        Quad::filled(panel, theme.chrome.raised)
+            .rounded(metrics.corner_radius)
+            .bordered(metrics.border_width, theme.chrome.border),
+    );
+
+    let input = palette::input_rect(panel, scale);
+    frame.overlay_quad(Quad::filled(
+        Rect::new(input.x, input.bottom() - 1.0, input.width, 1.0),
+        theme.chrome.border,
+    ));
+
+    let caret_gap = metrics.panel_padding + 18.0 * scale;
+    frame.overlay_text(
+        TextRun::new(
+            ">",
+            Rect::new(
+                input.x + metrics.panel_padding,
+                input.y,
+                20.0 * scale,
+                input.height,
+            ),
+            type_scale.body,
+            theme.chrome.accent,
+        )
+        .mono()
+        .line_height(input.height),
+    );
+
+    if state.query.is_empty() {
+        frame.overlay_text(
+            TextRun::new(
+                "Что сделать",
+                Rect::new(
+                    input.x + caret_gap,
+                    input.y,
+                    input.width - caret_gap,
+                    input.height,
+                ),
+                type_scale.large,
+                theme.chrome.text_faint,
+            )
+            .line_height(input.height),
+        );
+    } else {
+        frame.overlay_text(
+            TextRun::new(
+                state.query.clone(),
+                Rect::new(
+                    input.x + caret_gap,
+                    input.y,
+                    input.width - caret_gap,
+                    input.height,
+                ),
+                type_scale.large,
+                theme.chrome.text_strong,
+            )
+            .line_height(input.height),
+        );
+    }
+
+    for (index, row) in state.rows.iter().enumerate().take(palette::MAX_ROWS) {
+        let rect = palette::row_rect(panel, index, scale);
+        if rect.bottom() > palette::footer_rect(panel, scale).y {
+            break;
+        }
+
+        if index == state.selected {
+            frame.overlay_quad(
+                Quad::filled(
+                    rect.inset_by(PADDING_X * scale, 2.0 * scale),
+                    theme.chrome.selected,
+                )
+                .rounded(metrics.corner_radius_small),
+            );
+        }
+
+        let spans = row
+            .matched
+            .iter()
+            .map(|range| Span::new(range.clone(), theme.chrome.accent))
+            .collect();
+
+        let label = Rect::new(
+            rect.x + metrics.panel_padding,
+            rect.y,
+            rect.width - metrics.panel_padding * 2.0 - 90.0 * scale,
+            rect.height,
+        );
+        frame.overlay_text(
+            TextRun::new(
+                row.title.clone(),
+                label,
+                type_scale.body,
+                if index == state.selected {
+                    theme.chrome.text_strong
+                } else {
+                    theme.chrome.text
+                },
+            )
+            .line_height(rect.height)
+            .spans(spans),
+        );
+
+        if let Some(hint) = row.hint.as_ref() {
+            frame.overlay_text(
+                TextRun::new(
+                    hint.clone(),
+                    Rect::new(
+                        rect.x + metrics.panel_padding,
+                        rect.y,
+                        rect.width - metrics.panel_padding * 2.0,
+                        rect.height,
+                    ),
+                    type_scale.small,
+                    theme.chrome.text_faint,
+                )
+                .mono()
+                .align(TextAlign::End)
+                .line_height(rect.height),
+            );
+        }
+    }
+
+    if state.rows.is_empty() && !state.query.is_empty() {
+        let empty = palette::row_rect(panel, 0, scale);
+        frame.overlay_text(
+            TextRun::new(
+                "Ничего не нашлось",
+                Rect::new(
+                    empty.x + metrics.panel_padding,
+                    empty.y,
+                    empty.width,
+                    empty.height,
+                ),
+                type_scale.body,
+                theme.chrome.text_faint,
+            )
+            .line_height(empty.height),
+        );
+    }
+
+    let footer = palette::footer_rect(panel, scale);
+    frame.overlay_quad(Quad::filled(
+        Rect::new(footer.x, footer.y, footer.width, 1.0),
+        theme.chrome.border,
+    ));
+    frame.overlay_text(
+        TextRun::new(
+            "стрелки — выбрать    ввод — выполнить    esc — закрыть",
+            Rect::new(
+                footer.x + metrics.panel_padding,
+                footer.y,
+                footer.width - metrics.panel_padding * 2.0,
+                footer.height,
+            ),
+            type_scale.small,
+            theme.chrome.text_faint,
+        )
+        .mono()
+        .line_height(footer.height),
+    );
+}
+
+const PADDING_X: f32 = 6.0;
