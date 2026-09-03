@@ -7,6 +7,7 @@ pub enum Command {
     Quit,
     OpenSettings,
     OpenFolder,
+    OpenFile,
     ShowWelcome,
     OpenPalette,
     CloseTab,
@@ -124,7 +125,7 @@ pub fn from_logical(key: &Key) -> Option<Bound> {
         Key::Character(text) => {
             let mut chars = text.chars();
             let first = chars.next()?;
-            if chars.next().is_some() {
+            if chars.next().is_some() || !first.is_ascii() {
                 return None;
             }
             Bound::Char(first.to_ascii_lowercase())
@@ -159,6 +160,7 @@ pub fn command_named(name: &str) -> Option<Command> {
         "delete-word-forward" => Command::DeleteWord { forward: true },
         "palette" => Command::OpenPalette,
         "open-folder" => Command::OpenFolder,
+        "open-file" => Command::OpenFile,
         "welcome" => Command::ShowWelcome,
         "settings" => Command::OpenSettings,
         "theme" => Command::ToggleAppearance,

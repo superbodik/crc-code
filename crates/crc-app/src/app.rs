@@ -7,7 +7,7 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    palette, settings as settings_view, tabs, welcome,
+    palette, rail, settings as settings_view, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -174,6 +174,7 @@ impl App {
             Command::Quit => event_loop.exit(),
             Command::OpenPalette => self.toggle_palette(),
             Command::OpenFolder => self.pick_folder(),
+            Command::OpenFile => self.pick_file(),
             Command::ShowWelcome => self.show_welcome(),
             Command::OpenSettings => self.toggle_settings(),
             Command::Copy => self.copy(false),
@@ -296,6 +297,24 @@ impl App {
         }
 
         let layout = self.layout();
+        let metrics = self.theme.metrics();
+
+        let rail_hover = layout
+            .rail
+            .and_then(|bar| rail::action_at(bar, &metrics, x, y));
+        if rail_hover != self.session.view.hovered_rail {
+            self.session.view.hovered_rail = rail_hover;
+            self.request_redraw();
+        }
+
+        let explorer_hover = layout
+            .sidebar
+            .and_then(|bar| view::explorer_button_at(bar, &metrics, x, y));
+        if explorer_hover != self.session.view.hovered_explorer {
+            self.session.view.hovered_explorer = explorer_hover;
+            self.request_redraw();
+        }
+
         if self.session.view.settings.is_some() && !layout.titlebar.contains(x, y) {
             self.settings_hover(x, y);
         } else if self.session.view.welcome.is_some() && !layout.titlebar.contains(x, y) {
@@ -449,10 +468,35 @@ impl App {
             None => {}
         }
 
+        if let Some(rail_bar) = layout.rail
+            && rail_bar.contains(x, y)
+        {
+            let metrics = self.theme.metrics();
+            match rail::action_at(rail_bar, &metrics, x, y) {
+                Some(rail::RailAction::Explorer) => {
+                    self.state.sidebar_open = !self.state.sidebar_open;
+                    self.store();
+                }
+                Some(rail::RailAction::Search) => self.toggle_palette(),
+                Some(rail::RailAction::Settings) => self.toggle_settings(),
+                None => {}
+            }
+            return;
+        }
+
         if let Some(sidebar) = layout.sidebar
             && sidebar.contains(x, y)
         {
             let metrics = self.theme.metrics();
+
+            if let Some(button) = view::explorer_button_at(sidebar, &metrics, x, y) {
+                match button {
+                    view::ExplorerButton::OpenFolder => self.pick_folder(),
+                    view::ExplorerButton::OpenFile => self.pick_file(),
+                }
+                return;
+            }
+
             if let Some(row) = view::explorer_row(sidebar, &metrics, y)
                 && self.session.open_row(row)
             {
@@ -866,6 +910,29 @@ impl App {
         }
     }
 
+    fn pick_file(&mut self) {
+        let picked = rfd::FileDialog::new()
+            .set_title("Открыть файл")
+            .set_directory(self.session.root())
+            .pick_file();
+
+        let Some(path) = picked else { return };
+
+        if self.session.reveal(&path).is_err() {
+            let Some(parent) = path.parent() else { return };
+            self.open_project(parent);
+
+            if let Err(error) = self.session.reveal(&path) {
+                tracing::warn!("could not open {}: {error}", path.display());
+                return;
+            }
+        }
+
+        self.last_edit = None;
+        self.refresh_welcome();
+        self.request_redraw();
+    }
+
     fn open_project(&mut self, path: &std::path::Path) {
         self.session.save_all();
         self.settings
@@ -1099,29 +1166,7 @@ impl App {
         let Some(state) = self.session.view.settings.as_ref() else {
             return;
         };
-        let taken: Vec<crc_config::Chord> = state
-            .bindings
-            .iter()
-            .filter_map(|row| crc_config::Chord::parse(&row.keys))
-            .collect();
-
-        let mut keys: Vec<crc_config::Binding> = crc_config::keymap::defaults()
-            .into_iter()
-            .filter(|binding| {
-                crc_config::Chord::parse(&binding.keys)
-                    .is_some_and(|chord| !taken.contains(&chord))
-            })
-            .map(|binding| crc_config::Binding::new(binding.keys, ""))
-            .collect();
-
-        keys.extend(
-            state
-                .bindings
-                .iter()
-                .filter(|row| !row.keys.is_empty())
-                .map(|row| crc_config::Binding::new(row.keys.clone(), row.command.clone())),
-        );
-        self.settings.keys = keys;
+        self.settings.keys = crate::keys::overrides(&state.bindings);
 
         let (keymap, rejected) = self.settings.keymap();
         for spec in &rejected {
@@ -1259,10 +1304,12 @@ impl App {
     }
 }
 
+
 fn actions(keymap: &Keymap) -> Vec<Action> {
     let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
         Action::new("open-folder", "Открыть папку проекта", "Файл").hint(hint("open-folder")),
+        Action::new("open-file", "Открыть файл", "Файл").hint(hint("open-file")),
         Action::new("settings", "Настройки", "Вид").hint(hint("settings")),
         Action::new("copy", "Копировать", "Правка").hint(hint("copy")),
         Action::new("cut", "Вырезать", "Правка").hint(hint("cut")),

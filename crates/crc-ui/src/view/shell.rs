@@ -9,6 +9,9 @@ use crate::view::palette;
 use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 use crate::view::tabs;
+use crate::icon;
+use crate::view::hit;
+use crate::view::rail as rail_view;
 use crate::view::settings as settings_view;
 use crate::view::welcome;
 
@@ -24,7 +27,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
         return frame;
     }
 
-    rail(&mut frame, layout, theme);
+    rail(&mut frame, layout, theme, view);
     sidebar(&mut frame, layout, theme, view);
     tabs(&mut frame, layout, theme, view);
     breadcrumbs(&mut frame, layout, theme, view);
@@ -127,23 +130,48 @@ fn titlebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView)
     );
 }
 
-fn rail(frame: &mut Frame, layout: &Shell, theme: &Theme) {
+fn rail(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
     let Some(rail) = layout.rail else { return };
     frame.quad(Quad::filled(rail, theme.chrome.panel));
     hairline_right(frame, rail, theme.chrome.border);
 
     let metrics = theme.metrics();
-    for index in 0..4 {
-        let y = rail.y + metrics.panel_padding + index as f32 * (metrics.row_height + 8.0);
-        let colour = if index == 0 {
-            theme.chrome.accent
-        } else {
-            theme.chrome.text_faint
+
+    for (index, action) in rail_view::RailAction::ALL.into_iter().enumerate() {
+        let button = rail_view::button(rail, &metrics, index);
+        let current = match action {
+            rail_view::RailAction::Explorer => layout.sidebar.is_some(),
+            rail_view::RailAction::Search => false,
+            rail_view::RailAction::Settings => view.settings.is_some(),
         };
-        frame.quad(
-            Quad::filled(Rect::new(rail.x + 14.0, y, 16.0, 16.0), colour)
-                .rounded(metrics.corner_radius_small * 0.6),
-        );
+        let hovered = view.hovered_rail == Some(action);
+
+        if current || hovered {
+            frame.quad(
+                Quad::filled(
+                    button,
+                    if current {
+                        theme.chrome.selected
+                    } else {
+                        theme.chrome.hover
+                    },
+                )
+                .rounded(metrics.corner_radius_small),
+            );
+        }
+
+        frame.text(TextRun::icon(
+            action.glyph(),
+            button,
+            18.0,
+            if current {
+                theme.chrome.accent
+            } else if hovered {
+                theme.chrome.text
+            } else {
+                theme.chrome.text_faint
+            },
+        ));
     }
 }
 
@@ -174,6 +202,27 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
         .line_height(header.height),
     );
 
+    for (index, button) in hit::ExplorerButton::ALL.into_iter().enumerate() {
+        let rect = hit::explorer_button(sidebar, &metrics, index);
+        let hovered = view.hovered_explorer == Some(button);
+
+        if hovered {
+            frame.quad(
+                Quad::filled(rect, theme.chrome.hover).rounded(metrics.corner_radius_small),
+            );
+        }
+        frame.text(TextRun::icon(
+            button.glyph(),
+            rect,
+            14.0,
+            if hovered {
+                theme.chrome.text_strong
+            } else {
+                theme.chrome.text_faint
+            },
+        ));
+    }
+
     let mut y = header.bottom();
     for entry in &view.files {
         if y + metrics.row_height > sidebar.bottom() {
@@ -189,20 +238,23 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
         }
 
         let indent = metrics.panel_padding + entry.depth as f32 * 12.0;
-        let marker = Rect::new(row.x + indent, row.y + row.height / 2.0 - 3.0, 6.0, 6.0);
-        frame.quad(
-            Quad::filled(
-                marker,
-                if entry.is_dir {
-                    theme.chrome.text_faint
-                } else if entry.modified {
-                    theme.chrome.warning
-                } else {
-                    theme.chrome.border
-                },
-            )
-            .rounded(if entry.is_dir { 1.0 } else { 3.0 }),
-        );
+        let marker = Rect::new(row.x + indent - 2.0, row.y, 16.0, row.height);
+        frame.text(TextRun::icon(
+            if entry.is_dir {
+                icon::FOLDER
+            } else {
+                icon::for_name(&entry.name)
+            },
+            marker,
+            13.0,
+            if entry.is_dir {
+                theme.chrome.text_muted
+            } else if entry.modified {
+                theme.chrome.warning
+            } else {
+                theme.chrome.text_faint
+            },
+        ));
 
         let text = Rect::new(
             row.x + indent + 14.0,

@@ -86,6 +86,36 @@ impl Session {
         self.open_file(&path).is_ok()
     }
 
+    pub fn reveal(&mut self, absolute: &Path) -> anyhow::Result<()> {
+        let root = self.root().to_path_buf();
+        let inside = absolute
+            .strip_prefix(&root)
+            .ok()
+            .or_else(|| {
+                let real = std::fs::canonicalize(absolute).ok()?;
+                let base = std::fs::canonicalize(&root).ok()?;
+                real.strip_prefix(&base).ok().map(|_| absolute)
+            })
+            .map(|_| ());
+
+        if inside.is_none() {
+            anyhow::bail!("{} is outside {}", absolute.display(), root.display());
+        }
+
+        let relative = absolute
+            .strip_prefix(&root)
+            .map(|path| path.to_path_buf())
+            .unwrap_or_else(|_| {
+                let real = std::fs::canonicalize(absolute).unwrap_or_else(|_| absolute.to_path_buf());
+                let base = std::fs::canonicalize(&root).unwrap_or(root.clone());
+                real.strip_prefix(&base)
+                    .map(|path| path.to_path_buf())
+                    .unwrap_or_else(|_| absolute.to_path_buf())
+            });
+
+        self.open_file(&relative)
+    }
+
     pub fn open_file(&mut self, path: &Path) -> anyhow::Result<()> {
         if let Some(index) = self.documents.index_of(path) {
             self.documents.activate(index);

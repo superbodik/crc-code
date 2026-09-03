@@ -1,5 +1,6 @@
 pub mod error;
 pub mod geometry;
+pub mod icon;
 pub mod gpu;
 pub mod layout;
 pub mod view;

@@ -14,6 +14,7 @@ use crate::geometry::Rect;
 pub enum FontKind {
     Sans,
     Mono,
+    Icon,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -85,6 +86,15 @@ impl TextRun {
         self
     }
 
+    pub fn icon(glyph: char, rect: Rect, size: f32, color: Rgba) -> Self {
+        Self {
+            font: FontKind::Icon,
+            align: TextAlign::Center,
+            line_height: size,
+            ..Self::new(glyph.to_string(), rect, size, color)
+        }
+    }
+
     pub fn weight(mut self, weight: Weight) -> Self {
         self.weight = weight;
         self
@@ -145,7 +155,10 @@ pub struct TextLayer {
 
 impl TextLayer {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
-        let font_system = FontSystem::new();
+        let mut font_system = FontSystem::new();
+        font_system
+            .db_mut()
+            .load_font_data(crate::icon::DATA.to_vec());
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
         let mut atlas = TextAtlas::new(device, queue, &cache, format);
@@ -197,6 +210,7 @@ impl TextLayer {
             let family = match run.font {
                 FontKind::Sans => self.sans.as_str(),
                 FontKind::Mono => self.mono.as_str(),
+                FontKind::Icon => crate::icon::FAMILY,
             };
             let attrs = Attrs::new()
                 .family(Family::Name(family))
@@ -265,6 +279,7 @@ impl TextLayer {
         let family = match run.font {
             FontKind::Sans => self.sans.as_str(),
             FontKind::Mono => self.mono.as_str(),
+            FontKind::Icon => crate::icon::FAMILY,
         };
         let attrs = Attrs::new()
             .family(Family::Name(family))

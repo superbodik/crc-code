@@ -3,6 +3,7 @@ pub mod explorer;
 pub mod hit;
 pub mod logo;
 pub mod palette;
+pub mod rail;
 pub mod selection;
 pub mod settings;
 pub mod shell;
@@ -12,7 +13,11 @@ pub mod welcome;
 
 pub use controls::{Edge, WindowControl, control_at, control_rect, is_drag_handle, resize_edge};
 pub use explorer::tree;
-pub use hit::{buffer_point, explorer_header_height, explorer_row};
+pub use hit::{
+    ExplorerButton, buffer_point, explorer_button, explorer_button_at, explorer_header_height,
+    explorer_row,
+};
+pub use rail::RailAction;
 pub use logo::{Mark, clear_space, mark};
 pub use palette::{Action, PaletteView};
 pub use selection::{Band, bands};

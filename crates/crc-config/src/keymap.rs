@@ -99,7 +99,7 @@ impl Chord {
                         None => {
                             let mut chars = other.chars();
                             let first = chars.next()?;
-                            if chars.next().is_some() {
+                            if chars.next().is_some() || !first.is_ascii() {
                                 return None;
                             }
                             Key::Char(first.to_ascii_lowercase())
@@ -226,6 +226,7 @@ pub fn defaults() -> Vec<Binding> {
         Binding::new("ctrl+delete", "delete-word-forward"),
         Binding::new("ctrl+k", "palette"),
         Binding::new("ctrl+o", "open-folder"),
+        Binding::new("ctrl+shift+o", "open-file"),
         Binding::new("ctrl+,", "settings"),
         Binding::new("ctrl+shift+,", "settings"),
         Binding::new("ctrl+shift+w", "welcome"),

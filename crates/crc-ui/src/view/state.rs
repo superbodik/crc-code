@@ -5,6 +5,8 @@ use crc_theme::Highlight;
 
 use crate::view::controls::WindowControl;
 use crate::view::palette::PaletteView;
+use crate::view::hit::ExplorerButton;
+use crate::view::rail::RailAction;
 use crate::view::settings::SettingsView;
 use crate::view::welcome::WelcomeView;
 
@@ -104,6 +106,8 @@ pub struct EditorView {
     pub palette: Option<PaletteView>,
     pub welcome: Option<WelcomeView>,
     pub settings: Option<SettingsView>,
+    pub hovered_rail: Option<RailAction>,
+    pub hovered_explorer: Option<ExplorerButton>,
     pub selection: Option<Range<usize>>,
     pub dirty: bool,
 }
