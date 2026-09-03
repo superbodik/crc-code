@@ -161,8 +161,19 @@ mod keymaps {
     fn two_chords_may_share_one_command() {
         let map = Keymap::default();
 
-        assert_eq!(map.command(&Chord::parse("ctrl+q").unwrap()), Some("quit"));
-        assert_eq!(map.command(&Chord::parse("escape").unwrap()), Some("quit"));
+        assert_eq!(map.command(&Chord::parse("ctrl+shift+z").unwrap()), Some("redo"));
+        assert_eq!(map.command(&Chord::parse("ctrl+y").unwrap()), Some("redo"));
+    }
+
+    #[test]
+    fn escape_does_not_close_the_editor() {
+        let map = Keymap::default();
+
+        assert_eq!(
+            map.command(&Chord::parse("escape").unwrap()),
+            None,
+            "escape dismisses what is open, it never ends the session"
+        );
     }
 }
 
