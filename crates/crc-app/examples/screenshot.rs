@@ -34,17 +34,63 @@ fn main() -> anyhow::Result<()> {
     let mut canvas = Offscreen::new(WIDTH, HEIGHT)?;
     println!("rendering on {}", canvas.adapter());
 
-    for (name, appearance, density, zen, query) in [
-        ("dark", Appearance::Dark, Density::Balanced, false, None),
-        ("light", Appearance::Light, Density::Balanced, false, None),
-        ("zen", Appearance::Dark, Density::Balanced, true, None),
-        ("dense", Appearance::Dark, Density::Dense, false, None),
+    let full = ShellState::default();
+    let stripped = ShellState {
+        rail: false,
+        minimap: false,
+        panel: false,
+        breadcrumbs: false,
+        ..ShellState::default()
+    };
+
+    for (name, appearance, density, zen, query, state) in [
+        (
+            "dark",
+            Appearance::Dark,
+            Density::Balanced,
+            false,
+            None,
+            &full,
+        ),
+        (
+            "light",
+            Appearance::Light,
+            Density::Balanced,
+            false,
+            None,
+            &full,
+        ),
+        (
+            "zen",
+            Appearance::Dark,
+            Density::Balanced,
+            true,
+            None,
+            &full,
+        ),
+        (
+            "dense",
+            Appearance::Dark,
+            Density::Dense,
+            false,
+            None,
+            &full,
+        ),
         (
             "palette",
             Appearance::Dark,
             Density::Balanced,
             false,
             Some("тем"),
+            &full,
+        ),
+        (
+            "stripped",
+            Appearance::Light,
+            Density::Balanced,
+            false,
+            None,
+            &stripped,
         ),
     ] {
         session.view.palette = query.map(|text| PaletteView {
@@ -68,11 +114,7 @@ fn main() -> anyhow::Result<()> {
             line_height: theme.type_scale.code * crc_theme::typography::LINE_HEIGHT_CODE,
         };
 
-        let layout = Shell::compute(
-            Rect::from_size(WIDTH as f32, HEIGHT as f32),
-            &theme,
-            &ShellState::default(),
-        );
+        let layout = Shell::compute(Rect::from_size(WIDTH as f32, HEIGHT as f32), &theme, state);
         let frame = view::draw(&layout, &theme, &session.view, metrics);
         let pixels = canvas.render_frame(&frame);
 

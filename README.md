@@ -11,7 +11,7 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 [![Rust](https://img.shields.io/badge/Rust-1.96%2B-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![wgpu](https://img.shields.io/badge/wgpu-30-7c5cff)](https://wgpu.rs)
 [![tree-sitter](https://img.shields.io/badge/tree--sitter-12%20languages-4a7d5f)](https://tree-sitter.github.io)
-[![Tests](https://img.shields.io/badge/tests-305%20passing-3d6b50)](#testing)
+[![Tests](https://img.shields.io/badge/tests-332%20passing-3d6b50)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-2f6ba8)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-b0873f)]()
 
@@ -89,6 +89,40 @@ swaps back when you point at it.
 The three dots on the left close, minimize and maximize. The title bar drags
 the window; double-clicking it maximizes. The edges resize.
 
+## Settings
+
+Everything the editor remembers lives in one file — `%APPDATA%\CRC Code\settings.toml`
+on Windows, `~/.config/crc-code/settings.toml` elsewhere. Point `CRC_CONFIG_DIR`
+somewhere else to keep a separate profile.
+
+```toml
+appearance = "dark"      # or "light"
+density = "balanced"     # calm | balanced | dense
+autosave_ms = 800
+
+[visible]                # anything here can be turned off
+rail = true
+explorer = true
+tabs = true
+breadcrumbs = true
+minimap = true
+panel = true
+status_bar = true
+
+[[keys]]                 # rebind anything
+keys = "ctrl+p"
+command = "palette"
+
+[[keys]]                 # an empty command unbinds the chord
+keys = "ctrl+s"
+command = ""
+```
+
+Bindings are read after the defaults, so yours win. A line that makes no sense
+is reported and skipped — one typo does not take the keymap down with it. What
+cannot be hidden is the buffer, its gutter and the title bar: the editor has to
+stay an editor, and the window has to stay draggable.
+
 ## Architecture
 
 One responsibility per file, one subsystem per crate.
@@ -99,6 +133,7 @@ One responsibility per file, one subsystem per crate.
 | [`crc-text`](crates/crc-text) | The buffer: rope storage, edits, undo history, selections, authorship |
 | [`crc-editor`](crates/crc-editor) | The document: buffer, syntax tree and cursor kept in step |
 | [`crc-theme`](crates/crc-theme) | Design tokens: colours by role, type scale, density profiles |
+| [`crc-config`](crates/crc-config) | Settings: key bindings, what is on screen, where you have been |
 | [`crc-syntax`](crates/crc-syntax) | tree-sitter: incremental parsing, highlight roles, language detection |
 | [`crc-ui`](crates/crc-ui) | Layout, the GPU renderer, the frame builder, the window |
 | [`crc-app`](crates/crc-app) | The `crc` binary: window, input, workspace session |
@@ -126,6 +161,9 @@ colour, ink in the buffer, the caret on the cursor line.
 - Mouse: click to place the caret, drag to select, wheel to scroll, click to open a file
 - Several files open at once, each keeping its own cursor and history
 - A command palette with fuzzy search over everything the editor can do
+- Key bindings as data — rebind anything, unbind anything, in a settings file
+- Every panel can be hidden; the buffer and its gutter cannot
+- Settings and recent projects remembered between runs
 - Auto-save 800 ms after the last keystroke, on focus loss and on close
 - Incremental highlighting across 12 languages, re-parsed per keystroke
 - GPU shell: title bar, rail, explorer, tabs, gutter, buffer, minimap, panel, status bar
@@ -134,6 +172,8 @@ colour, ink in the buffer, the caret on the cursor line.
 
 **Not yet**
 
+- Opening a project from a dialog, and a welcome screen for recent ones
+- A settings screen — today the settings file is the only way in
 - Split panes
 - Find and replace
 - LSP: diagnostics, go to definition, completion
@@ -146,7 +186,7 @@ colour, ink in the buffer, the caret on the cursor line.
 cargo test --workspace
 ```
 
-305 tests. The interesting ones do not mock: contrast ratios are computed from
+332 tests. The interesting ones do not mock: contrast ratios are computed from
 the actual palette, grammars are loaded and real snippets parsed, and frames are
 rendered on the real GPU and read back pixel by pixel.
 

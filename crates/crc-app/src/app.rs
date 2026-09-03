@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crc_editor::{AUTOSAVE_IDLE_MS, Motion};
+use crc_config::{Keymap, Settings};
+use crc_editor::Motion;
 use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
@@ -14,7 +15,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{CursorIcon, ResizeDirection, Window, WindowId};
 
-use crate::input::{Command, density_shortcut, resolve};
+use crate::input::{Command, command_named, resolve};
 use crate::session::Session;
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
@@ -33,16 +34,48 @@ pub struct App {
     window: Option<Arc<Window>>,
     renderer: Option<WindowRenderer>,
     actions: Vec<Action>,
+    settings: Settings,
+    keymap: Keymap,
     frames: u32,
     smoke: bool,
 }
 
 impl App {
     pub fn new(session: Session, smoke: bool) -> Self {
+        let (settings, complaint) = Settings::load(&crc_config::settings_file());
+        if let Some(complaint) = complaint {
+            eprintln!("settings could not be read, using defaults: {complaint}");
+        }
+        let (keymap, rejected) = settings.keymap();
+        for spec in &rejected {
+            eprintln!("key binding \"{spec}\" makes no sense and was skipped");
+        }
+
+        let theme = Theme::new(match settings.appearance.as_str() {
+            "light" => crc_theme::Appearance::Light,
+            _ => crc_theme::Appearance::Dark,
+        })
+        .with_density(match settings.density.as_str() {
+            "calm" => Density::Calm,
+            "dense" => Density::Dense,
+            _ => Density::Balanced,
+        });
+
+        let state = ShellState {
+            rail: settings.visible.rail,
+            sidebar_open: settings.visible.explorer,
+            tabs: settings.visible.tabs,
+            breadcrumbs: settings.visible.breadcrumbs,
+            minimap: settings.visible.minimap,
+            panel: settings.visible.panel,
+            status_bar: settings.visible.status_bar,
+            ..ShellState::default()
+        };
+
         Self {
             session,
-            theme: Theme::dark(),
-            state: ShellState::default(),
+            theme,
+            state,
             metrics: CodeMetrics::default(),
             modifiers: ModifiersState::empty(),
             cursor: (-1.0, -1.0),
@@ -51,7 +84,9 @@ impl App {
             last_edit: None,
             window: None,
             renderer: None,
-            actions: actions(),
+            actions: actions(&keymap),
+            settings,
+            keymap,
             frames: 0,
             smoke,
         }
@@ -124,10 +159,7 @@ impl App {
     fn apply(&mut self, command: Command, event_loop: &ActiveEventLoop) {
         let rows = self.rows();
         match command {
-            Command::Quit => {
-                self.session.save_all();
-                event_loop.exit();
-            }
+            Command::Quit => event_loop.exit(),
             Command::OpenPalette => self.toggle_palette(),
             Command::CloseTab => {
                 if let Some(index) = self.session.active_tab() {
@@ -299,7 +331,7 @@ impl App {
 
             self.session.view.palette = None;
             if let Some(id) = chosen
-                && let Some(command) = command_for_action(id)
+                && let Some(command) = command_named(id)
             {
                 self.apply(command, event_loop);
             }
@@ -442,11 +474,16 @@ impl ApplicationHandler for App {
         self.calibrate();
     }
 
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.session.save_all();
+        self.store();
+    }
+
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let Some(last) = self.last_edit else {
             return;
         };
-        let idle = Duration::from_millis(AUTOSAVE_IDLE_MS);
+        let idle = Duration::from_millis(self.settings.autosave_ms);
         let elapsed = last.elapsed();
 
         if elapsed < idle {
@@ -465,10 +502,7 @@ impl ApplicationHandler for App {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
-            WindowEvent::CloseRequested => {
-                self.session.save_all();
-                event_loop.exit();
-            }
+            WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
             WindowEvent::Focused(focused) => {
                 self.session.view.focused = focused;
@@ -553,7 +587,32 @@ impl ApplicationHandler for App {
 
 impl App {
     fn command_for(&self, key: &Key) -> Option<Command> {
-        density_shortcut(key, self.modifiers).or_else(|| resolve(key, self.modifiers, self.rows()))
+        resolve(key, self.modifiers, self.rows(), &self.keymap)
+    }
+
+    fn store(&mut self) {
+        self.settings.appearance = match self.theme.appearance {
+            crc_theme::Appearance::Light => "light".to_string(),
+            crc_theme::Appearance::Dark => "dark".to_string(),
+        };
+        self.settings.density = match self.theme.density {
+            Density::Calm => "calm".to_string(),
+            Density::Dense => "dense".to_string(),
+            Density::Balanced => "balanced".to_string(),
+        };
+        self.settings.visible.explorer = self.state.sidebar_open;
+        self.settings.visible.rail = self.state.rail;
+        self.settings.visible.tabs = self.state.tabs;
+        self.settings.visible.breadcrumbs = self.state.breadcrumbs;
+        self.settings.visible.minimap = self.state.minimap;
+        self.settings.visible.panel = self.state.panel;
+        self.settings.visible.status_bar = self.state.status_bar;
+        self.settings
+            .remember(self.session.root(), crc_config::recent::now());
+
+        if let Err(error) = self.settings.save(&crc_config::settings_file()) {
+            tracing::error!("settings not saved: {error}");
+        }
     }
 }
 
@@ -601,7 +660,7 @@ impl App {
                     .and_then(|state| state.selected_id());
                 self.session.view.palette = None;
                 if let Some(id) = chosen
-                    && let Some(command) = command_for_action(id)
+                    && let Some(command) = command_named(id)
                 {
                     self.apply(command, event_loop);
                 }
@@ -634,37 +693,20 @@ impl App {
     }
 }
 
-fn actions() -> Vec<Action> {
+fn actions(keymap: &Keymap) -> Vec<Action> {
+    let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
-        Action::new("save", "Сохранить файл", "Файл").hint("Ctrl+S"),
-        Action::new("close-tab", "Закрыть вкладку", "Файл").hint("Ctrl+W"),
-        Action::new("undo", "Отменить правку", "Правка").hint("Ctrl+Z"),
-        Action::new("redo", "Вернуть правку", "Правка").hint("Ctrl+Shift+Z"),
-        Action::new("select-all", "Выделить всё", "Правка").hint("Ctrl+A"),
-        Action::new("theme", "Переключить светлую и тёмную тему", "Вид").hint("Ctrl+D"),
-        Action::new("sidebar", "Показать или скрыть проводник", "Вид").hint("Ctrl+B"),
-        Action::new("zen", "Zen — оставить только код", "Вид").hint("Alt+Z"),
-        Action::new("calm", "Плотность: спокойно", "Вид").hint("Alt+1"),
-        Action::new("balanced", "Плотность: сбалансированно", "Вид").hint("Alt+2"),
-        Action::new("dense", "Плотность: максимум мощи", "Вид").hint("Alt+3"),
-        Action::new("quit", "Выйти из редактора", "Файл").hint("Ctrl+Q"),
+        Action::new("save", "Сохранить файл", "Файл").hint(hint("save")),
+        Action::new("close-tab", "Закрыть вкладку", "Файл").hint(hint("close-tab")),
+        Action::new("undo", "Отменить правку", "Правка").hint(hint("undo")),
+        Action::new("redo", "Вернуть правку", "Правка").hint(hint("redo")),
+        Action::new("select-all", "Выделить всё", "Правка").hint(hint("select-all")),
+        Action::new("theme", "Переключить светлую и тёмную тему", "Вид").hint(hint("theme")),
+        Action::new("sidebar", "Показать или скрыть проводник", "Вид").hint(hint("sidebar")),
+        Action::new("zen", "Zen — оставить только код", "Вид").hint(hint("zen")),
+        Action::new("calm", "Плотность: спокойно", "Вид").hint(hint("calm")),
+        Action::new("balanced", "Плотность: сбалансированно", "Вид").hint(hint("balanced")),
+        Action::new("dense", "Плотность: максимум мощи", "Вид").hint(hint("dense")),
+        Action::new("quit", "Выйти из редактора", "Файл").hint(hint("quit")),
     ]
-}
-
-fn command_for_action(id: &str) -> Option<Command> {
-    Some(match id {
-        "save" => Command::Save,
-        "close-tab" => Command::CloseTab,
-        "undo" => Command::Undo,
-        "redo" => Command::Redo,
-        "select-all" => Command::SelectAll,
-        "theme" => Command::ToggleAppearance,
-        "sidebar" => Command::ToggleSidebar,
-        "zen" => Command::ToggleZen,
-        "calm" => Command::Density(1),
-        "balanced" => Command::Density(2),
-        "dense" => Command::Density(3),
-        "quit" => Command::Quit,
-        _ => return None,
-    })
 }

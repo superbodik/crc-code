@@ -1,0 +1,15 @@
+[package]
+name = "crc-config"
+description = "Settings for CRC Code: key bindings, what is on screen, and where you have been."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror.workspace = true
+toml = "0.9"
+
+[dev-dependencies]
+tempfile = "3"

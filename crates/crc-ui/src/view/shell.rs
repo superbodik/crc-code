@@ -210,6 +210,9 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
 
 fn tabs(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
     let bar = layout.tabs;
+    if bar.is_empty() {
+        return;
+    }
     let scale = theme.type_scale;
 
     frame.quad(Quad::filled(bar, theme.chrome.panel));

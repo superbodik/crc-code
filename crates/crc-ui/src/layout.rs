@@ -5,6 +5,12 @@ use crate::geometry::Rect;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShellState {
     pub sidebar_open: bool,
+    pub rail: bool,
+    pub tabs: bool,
+    pub breadcrumbs: bool,
+    pub minimap: bool,
+    pub panel: bool,
+    pub status_bar: bool,
     pub aside_open: bool,
     pub aside_width: f32,
     pub panel_height: f32,
@@ -15,6 +21,12 @@ impl Default for ShellState {
     fn default() -> Self {
         Self {
             sidebar_open: true,
+            rail: true,
+            tabs: true,
+            breadcrumbs: true,
+            minimap: true,
+            panel: true,
+            status_bar: true,
             aside_open: false,
             aside_width: 320.0,
             panel_height: 200.0,
@@ -48,7 +60,7 @@ impl Shell {
 
         let (titlebar, body) = window.split_top(metrics.titlebar_height);
 
-        let (statusbar, body) = if theme.zen {
+        let (statusbar, body) = if theme.zen || !state.status_bar {
             (None, body)
         } else {
             let (bar, rest) = body.split_bottom(metrics.statusbar_height);
@@ -57,7 +69,7 @@ impl Shell {
 
         let mut body = body;
 
-        let rail = if !theme.zen && metrics.rail_width > 0.0 {
+        let rail = if !theme.zen && state.rail && metrics.rail_width > 0.0 {
             let (rail, rest) = body.split_left(metrics.rail_width);
             body = rest;
             Some(rail)
@@ -82,7 +94,8 @@ impl Shell {
             None
         };
 
-        let panel = if visible.bottom_panel && fits_height(&body, state.panel_height) {
+        let panel = if visible.bottom_panel && state.panel && fits_height(&body, state.panel_height)
+        {
             let (panel, rest) = body.split_bottom(state.panel_height);
             body = rest;
             Some(panel)
@@ -90,18 +103,24 @@ impl Shell {
             None
         };
 
-        let (tabs, body_below_tabs) = body.split_top(metrics.tabbar_height);
+        let (tabs, body_below_tabs) = if state.tabs && !theme.zen {
+            body.split_top(metrics.tabbar_height)
+        } else {
+            (Rect::new(body.x, body.y, body.width, 0.0), body)
+        };
         body = body_below_tabs;
 
-        let breadcrumbs = if visible.breadcrumbs && fits_height(&body, metrics.row_height) {
-            let (crumbs, rest) = body.split_top(metrics.row_height);
-            body = rest;
-            Some(crumbs)
-        } else {
-            None
-        };
+        let breadcrumbs =
+            if visible.breadcrumbs && state.breadcrumbs && fits_height(&body, metrics.row_height) {
+                let (crumbs, rest) = body.split_top(metrics.row_height);
+                body = rest;
+                Some(crumbs)
+            } else {
+                None
+            };
 
-        let minimap = if visible.minimap && fits_width(&body, state.minimap_width) {
+        let minimap = if visible.minimap && state.minimap && fits_width(&body, state.minimap_width)
+        {
             let (minimap, rest) = body.split_right(state.minimap_width);
             body = rest;
             Some(minimap)

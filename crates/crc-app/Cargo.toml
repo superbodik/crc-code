@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
+crc-config = { path = "../crc-config" }
 crc-core = { path = "../crc-core" }
 crc-editor = { path = "../crc-editor" }
 crc-syntax = { path = "../crc-syntax" }

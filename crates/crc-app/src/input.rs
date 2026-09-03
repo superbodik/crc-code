@@ -1,3 +1,5 @@
+use crc_config::Keymap;
+use crc_config::keymap::{Chord, Key as Bound};
 use crc_editor::Motion;
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 
@@ -19,7 +21,73 @@ pub enum Command {
     Save,
 }
 
-pub fn resolve(key: &Key, modifiers: ModifiersState, rows: usize) -> Option<Command> {
+pub fn chord(key: &Key, modifiers: ModifiersState) -> Option<Chord> {
+    let bound = match key {
+        Key::Named(NamedKey::Escape) => Bound::Escape,
+        Key::Named(NamedKey::Enter) => Bound::Enter,
+        Key::Named(NamedKey::Tab) => Bound::Tab,
+        Key::Named(NamedKey::Space) => Bound::Space,
+        Key::Named(NamedKey::Backspace) => Bound::Backspace,
+        Key::Named(NamedKey::Delete) => Bound::Delete,
+        Key::Named(NamedKey::Home) => Bound::Home,
+        Key::Named(NamedKey::End) => Bound::End,
+        Key::Named(NamedKey::PageUp) => Bound::PageUp,
+        Key::Named(NamedKey::PageDown) => Bound::PageDown,
+        Key::Named(NamedKey::ArrowLeft) => Bound::Left,
+        Key::Named(NamedKey::ArrowRight) => Bound::Right,
+        Key::Named(NamedKey::ArrowUp) => Bound::Up,
+        Key::Named(NamedKey::ArrowDown) => Bound::Down,
+        Key::Character(text) => {
+            let mut chars = text.chars();
+            let first = chars.next()?;
+            if chars.next().is_some() {
+                return None;
+            }
+            Bound::Char(first.to_ascii_lowercase())
+        }
+        _ => return None,
+    };
+
+    Some(Chord {
+        key: bound,
+        ctrl: modifiers.control_key(),
+        alt: modifiers.alt_key(),
+        shift: modifiers.shift_key(),
+    })
+}
+
+pub fn command_named(name: &str) -> Option<Command> {
+    Some(match name {
+        "save" => Command::Save,
+        "close-tab" => Command::CloseTab,
+        "quit" => Command::Quit,
+        "undo" => Command::Undo,
+        "redo" => Command::Redo,
+        "select-all" => Command::SelectAll,
+        "palette" => Command::OpenPalette,
+        "theme" => Command::ToggleAppearance,
+        "sidebar" => Command::ToggleSidebar,
+        "zen" => Command::ToggleZen,
+        "calm" => Command::Density(1),
+        "balanced" => Command::Density(2),
+        "dense" => Command::Density(3),
+        _ => return None,
+    })
+}
+
+pub fn resolve(
+    key: &Key,
+    modifiers: ModifiersState,
+    rows: usize,
+    keymap: &Keymap,
+) -> Option<Command> {
+    if let Some(chord) = chord(key, modifiers)
+        && let Some(name) = keymap.command(&chord)
+        && let Some(command) = command_named(name)
+    {
+        return Some(command);
+    }
+
     let control = modifiers.control_key();
     let shift = modifiers.shift_key();
     let alt = modifiers.alt_key();
@@ -32,8 +100,6 @@ pub fn resolve(key: &Key, modifiers: ModifiersState, rows: usize) -> Option<Comm
     };
 
     match key {
-        Key::Named(NamedKey::Escape) => Some(Command::Quit),
-
         Key::Named(NamedKey::ArrowLeft) if control => motion(Motion::WordLeft),
         Key::Named(NamedKey::ArrowRight) if control => motion(Motion::WordRight),
         Key::Named(NamedKey::ArrowLeft) => motion(Motion::Left),
@@ -53,42 +119,7 @@ pub fn resolve(key: &Key, modifiers: ModifiersState, rows: usize) -> Option<Comm
         Key::Named(NamedKey::Tab) => Some(Command::Insert("    ".to_string())),
         Key::Named(NamedKey::Space) if !control && !alt => Some(Command::Insert(" ".to_string())),
 
-        Key::Character(text) if control => match text.to_lowercase().as_str() {
-            "s" | "ы" => Some(Command::Save),
-            "z" | "я" if shift => Some(Command::Redo),
-            "z" | "я" => Some(Command::Undo),
-            "y" | "н" => Some(Command::Redo),
-            "a" | "ф" => Some(Command::SelectAll),
-            "b" | "и" => Some(Command::ToggleSidebar),
-            "d" | "в" => Some(Command::ToggleAppearance),
-            "q" | "й" => Some(Command::Quit),
-            "w" | "ц" => Some(Command::CloseTab),
-            "k" | "л" => Some(Command::OpenPalette),
-            _ => None,
-        },
-
-        Key::Character(text) if alt => match text.to_lowercase().as_str() {
-            "z" | "я" => Some(Command::ToggleZen),
-            _ => None,
-        },
-
-        Key::Character(text) => Some(Command::Insert(text.to_string())),
-
-        _ => None,
-    }
-}
-
-pub fn density_shortcut(key: &Key, modifiers: ModifiersState) -> Option<Command> {
-    if !modifiers.alt_key() {
-        return None;
-    }
-    let Key::Character(text) = key else {
-        return None;
-    };
-    match text.as_str() {
-        "1" => Some(Command::Density(1)),
-        "2" => Some(Command::Density(2)),
-        "3" => Some(Command::Density(3)),
+        Key::Character(text) if !control && !alt => Some(Command::Insert(text.to_string())),
         _ => None,
     }
 }
