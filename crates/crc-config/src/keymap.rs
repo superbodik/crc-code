@@ -216,6 +216,8 @@ pub fn defaults() -> Vec<Binding> {
         Binding::new("ctrl+y", "redo"),
         Binding::new("ctrl+a", "select-all"),
         Binding::new("ctrl+k", "palette"),
+        Binding::new("ctrl+o", "open-folder"),
+        Binding::new("ctrl+shift+w", "welcome"),
         Binding::new("ctrl+d", "theme"),
         Binding::new("ctrl+b", "sidebar"),
         Binding::new("alt+z", "zen"),

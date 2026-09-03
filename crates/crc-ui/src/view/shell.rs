@@ -9,11 +9,19 @@ use crate::view::palette;
 use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 use crate::view::tabs;
+use crate::view::welcome;
 
 pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetrics) -> Frame {
     let mut frame = Frame::new(theme.chrome.backdrop);
 
     titlebar(&mut frame, layout, theme, view);
+
+    if view.welcome.is_some() {
+        welcome_screen(&mut frame, layout, theme, view);
+        command_palette(&mut frame, layout, theme, view);
+        return frame;
+    }
+
     rail(&mut frame, layout, theme);
     sidebar(&mut frame, layout, theme, view);
     tabs(&mut frame, layout, theme, view);
@@ -549,15 +557,7 @@ fn command_palette(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &Edit
         return;
     };
 
-    let window = Rect::new(
-        0.0,
-        0.0,
-        layout.titlebar.width,
-        layout
-            .statusbar
-            .map(|bar| bar.bottom())
-            .unwrap_or(layout.buffer.bottom()),
-    );
+    let window = layout.window;
     let scale = theme.scale;
     let metrics = theme.metrics();
     let type_scale = theme.type_scale;
@@ -730,3 +730,172 @@ fn command_palette(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &Edit
 }
 
 const PADDING_X: f32 = 6.0;
+
+fn welcome_screen(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.welcome.as_ref() else {
+        return;
+    };
+
+    let scale = theme.scale;
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+
+    let window = Rect::new(
+        layout.window.x,
+        layout.titlebar.bottom(),
+        layout.window.width,
+        layout.window.bottom() - layout.titlebar.bottom(),
+    );
+    frame.quad(Quad::filled(window, theme.chrome.surface));
+
+    let placed = welcome::layout(window, state, scale);
+
+    let brand = if theme.appearance == crc_theme::Appearance::Dark {
+        Brand::on_dark()
+    } else {
+        Brand::colour()
+    };
+    logo::draw(
+        frame,
+        logo::mark(placed.mark.width, placed.mark.x, placed.mark.y),
+        brand,
+    );
+
+    frame.text(
+        TextRun::new(
+            "CRC Code",
+            placed.title,
+            type_scale.display * 1.05,
+            theme.chrome.text_strong,
+        )
+        .weight(Weight::Semibold)
+        .line_height(placed.title.height),
+    );
+    frame.text(
+        TextRun::new(
+            "Тихий редактор, который не мешает думать.",
+            placed.tagline,
+            type_scale.large,
+            theme.chrome.text_muted,
+        )
+        .line_height(placed.tagline.height),
+    );
+
+    if !placed.recent.is_empty() {
+        frame.text(
+            TextRun::new(
+                "Недавние проекты",
+                placed.recent_heading,
+                type_scale.small,
+                theme.chrome.text_faint,
+            )
+            .weight(Weight::Semibold)
+            .line_height(placed.recent_heading.height),
+        );
+    }
+
+    for (index, rect) in placed.recent.iter().enumerate() {
+        let Some(entry) = state.recent.get(index) else {
+            break;
+        };
+        let hovered = state.hovered == Some(welcome::Target::Recent(index));
+
+        if hovered {
+            frame.quad(
+                Quad::filled(rect.inset_by(-8.0 * scale, 0.0), theme.chrome.hover)
+                    .rounded(metrics.corner_radius_small),
+            );
+        }
+
+        frame.text(
+            TextRun::new(
+                entry.name.clone(),
+                Rect::new(
+                    rect.x,
+                    rect.y + 4.0 * scale,
+                    rect.width * 0.55,
+                    rect.height * 0.5,
+                ),
+                type_scale.large,
+                theme.chrome.text_strong,
+            )
+            .line_height(rect.height * 0.5),
+        );
+        frame.text(
+            TextRun::new(
+                entry.path.clone(),
+                Rect::new(
+                    rect.x,
+                    rect.y + rect.height * 0.5,
+                    rect.width * 0.75,
+                    rect.height * 0.45,
+                ),
+                type_scale.small,
+                theme.chrome.text_faint,
+            )
+            .mono()
+            .line_height(rect.height * 0.45),
+        );
+        frame.text(
+            TextRun::new(
+                entry.when.clone(),
+                Rect::new(rect.x, rect.y, rect.width, rect.height),
+                type_scale.small,
+                theme.chrome.text_faint,
+            )
+            .align(TextAlign::End)
+            .line_height(rect.height),
+        );
+    }
+
+    let opening = state.hovered == Some(welcome::Target::OpenFolder);
+    frame.quad(
+        Quad::filled(
+            placed.open_folder,
+            if opening {
+                theme.chrome.accent_hover
+            } else {
+                theme.chrome.accent_solid
+            },
+        )
+        .rounded(metrics.corner_radius_small),
+    );
+    frame.text(
+        TextRun::new(
+            "Открыть папку",
+            placed.open_folder,
+            type_scale.body,
+            theme.chrome.text_on_accent,
+        )
+        .weight(Weight::Semibold)
+        .align(TextAlign::Center)
+        .line_height(placed.open_folder.height),
+    );
+
+    for (rect, (keys, what)) in placed.hints.iter().zip(state.hints.iter()) {
+        frame.text(
+            TextRun::new(
+                keys.clone(),
+                Rect::new(rect.x, rect.y, 110.0 * scale, rect.height),
+                type_scale.small,
+                theme.chrome.accent,
+            )
+            .mono()
+            .line_height(rect.height),
+        );
+        frame.text(
+            TextRun::new(
+                what.clone(),
+                Rect::new(
+                    rect.x + 118.0 * scale,
+                    rect.y,
+                    rect.width - 118.0 * scale,
+                    rect.height,
+                ),
+                type_scale.small,
+                theme.chrome.text_muted,
+            )
+            .line_height(rect.height),
+        );
+    }
+}

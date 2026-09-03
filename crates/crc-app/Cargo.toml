@@ -23,6 +23,7 @@ crc-syntax = { path = "../crc-syntax" }
 crc-text = { path = "../crc-text" }
 crc-theme = { path = "../crc-theme" }
 crc-ui = { path = "../crc-ui" }
+rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "tokio"] }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

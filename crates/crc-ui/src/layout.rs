@@ -37,6 +37,7 @@ impl Default for ShellState {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shell {
+    pub window: Rect,
     pub titlebar: Rect,
     pub rail: Option<Rect>,
     pub sidebar: Option<Rect>,
@@ -131,6 +132,7 @@ impl Shell {
         let (gutter, buffer) = body.split_left(metrics.gutter_width.min(body.width * 0.5));
 
         Shell {
+            window,
             titlebar,
             rail,
             sidebar,

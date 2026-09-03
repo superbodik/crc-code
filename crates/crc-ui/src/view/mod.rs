@@ -7,6 +7,7 @@ pub mod selection;
 pub mod shell;
 pub mod state;
 pub mod tabs;
+pub mod welcome;
 
 pub use controls::{Edge, WindowControl, control_at, control_rect, is_drag_handle, resize_edge};
 pub use explorer::tree;
@@ -17,3 +18,4 @@ pub use selection::{Band, bands};
 pub use shell::draw;
 pub use state::{CodeMetrics, EditorView, FileEntry, Tab, VisibleText};
 pub use tabs::TabHit;
+pub use welcome::{RecentEntry, Target, WelcomeView};

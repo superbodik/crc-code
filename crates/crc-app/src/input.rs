@@ -5,6 +5,8 @@ use winit::keyboard::{Key, ModifiersState, NamedKey};
 
 pub enum Command {
     Quit,
+    OpenFolder,
+    ShowWelcome,
     OpenPalette,
     CloseTab,
     ToggleZen,
@@ -65,6 +67,8 @@ pub fn command_named(name: &str) -> Option<Command> {
         "redo" => Command::Redo,
         "select-all" => Command::SelectAll,
         "palette" => Command::OpenPalette,
+        "open-folder" => Command::OpenFolder,
+        "welcome" => Command::ShowWelcome,
         "theme" => Command::ToggleAppearance,
         "sidebar" => Command::ToggleSidebar,
         "zen" => Command::ToggleZen,

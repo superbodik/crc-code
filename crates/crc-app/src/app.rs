@@ -6,7 +6,8 @@ use crc_editor::Motion;
 use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
-    self, Action, CodeMetrics, Edge, PaletteView, TabHit, WindowControl, palette, tabs,
+    self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
+    palette, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -161,10 +162,13 @@ impl App {
         match command {
             Command::Quit => event_loop.exit(),
             Command::OpenPalette => self.toggle_palette(),
+            Command::OpenFolder => self.pick_folder(),
+            Command::ShowWelcome => self.show_welcome(),
             Command::CloseTab => {
                 if let Some(index) = self.session.active_tab() {
                     self.session.close_tab(index);
                     self.last_edit = None;
+                    self.refresh_welcome();
                 }
             }
             Command::ToggleZen => self.theme.zen = !self.theme.zen,
@@ -271,6 +275,10 @@ impl App {
         }
 
         let layout = self.layout();
+        if self.session.view.welcome.is_some() && !layout.titlebar.contains(x, y) {
+            self.welcome_hover(x, y);
+        }
+
         let control = view::control_at(layout.titlebar, x, y);
         if control != self.session.view.hovered_control {
             self.session.view.hovered_control = control;
@@ -323,9 +331,15 @@ impl App {
         let (x, y) = self.cursor;
         let layout = self.layout();
 
+        if self.session.view.welcome.is_some()
+            && !layout.titlebar.contains(x, y)
+            && self.welcome_press(x, y)
+        {
+            return;
+        }
+
         if let Some(state) = self.session.view.palette.as_ref() {
-            let window = Rect::from_size(layout.titlebar.width, self.window_rect().height);
-            let panel = palette::frame(window, state.rows.len(), self.theme.scale);
+            let panel = palette::frame(layout.window, state.rows.len(), self.theme.scale);
             let chosen = palette::row_at(panel, state.rows.len(), self.theme.scale, x, y)
                 .and_then(|index| state.rows.get(index).map(|row| row.id));
 
@@ -394,6 +408,7 @@ impl App {
             Some(TabHit::Close(index)) => {
                 self.session.close_tab(index);
                 self.last_edit = None;
+                self.refresh_welcome();
                 return;
             }
             Some(TabHit::Select(index)) => {
@@ -412,6 +427,7 @@ impl App {
                 && self.session.open_row(row)
             {
                 self.last_edit = None;
+                self.refresh_welcome();
             }
             return;
         }
@@ -472,6 +488,7 @@ impl ApplicationHandler for App {
         self.window = Some(window);
         self.session.view.focused = true;
         self.calibrate();
+        self.refresh_welcome();
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
@@ -693,9 +710,133 @@ impl App {
     }
 }
 
+impl App {
+    fn show_welcome(&mut self) {
+        let now = crc_config::recent::now();
+        let recent = self
+            .settings
+            .recent
+            .iter()
+            .take(welcome::MAX_RECENT)
+            .map(|entry| RecentEntry {
+                name: entry.name.clone(),
+                path: entry.path.to_string_lossy().into_owned(),
+                when: crc_config::recent::since(entry.opened_at, now),
+            })
+            .collect();
+
+        let hint = |command: &str| self.keymap.hint(command).unwrap_or_default();
+        self.session.view.welcome = Some(WelcomeView {
+            recent,
+            hints: vec![
+                (
+                    hint("palette"),
+                    "Командная палитра — всё с клавиатуры".to_string(),
+                ),
+                (hint("open-folder"), "Открыть другой проект".to_string()),
+                (hint("zen"), "Zen — панели уходят, остаётся код".to_string()),
+                (hint("theme"), "Светлая и тёмная тема".to_string()),
+            ],
+            hovered: None,
+        });
+    }
+
+    fn refresh_welcome(&mut self) {
+        let empty = self.session.view.tabs.is_empty();
+        if empty && self.session.view.welcome.is_none() {
+            self.show_welcome();
+        } else if !empty {
+            self.session.view.welcome = None;
+        }
+    }
+
+    fn pick_folder(&mut self) {
+        let picked = rfd::FileDialog::new()
+            .set_title("Открыть папку проекта")
+            .set_directory(self.session.root())
+            .pick_folder();
+
+        if let Some(path) = picked {
+            self.open_project(&path);
+        }
+    }
+
+    fn open_project(&mut self, path: &std::path::Path) {
+        self.session.save_all();
+        self.settings
+            .remember(self.session.root(), crc_config::recent::now());
+
+        match Session::open(path) {
+            Ok(session) => {
+                self.session = session;
+                self.settings.remember(path, crc_config::recent::now());
+                self.last_edit = None;
+                self.refresh_welcome();
+            }
+            Err(error) => {
+                tracing::error!("could not open {}: {error}", path.display());
+            }
+        }
+    }
+
+    fn welcome_press(&mut self, x: f32, y: f32) -> bool {
+        let Some(state) = self.session.view.welcome.as_ref() else {
+            return false;
+        };
+        let layout = self.layout();
+        let window = Rect::new(
+            layout.window.x,
+            layout.titlebar.bottom(),
+            layout.window.width,
+            layout.window.bottom() - layout.titlebar.bottom(),
+        );
+        let placed = welcome::layout(window, state, self.theme.scale);
+
+        match welcome::target_at(&placed, x, y) {
+            Some(welcome::Target::OpenFolder) => {
+                self.pick_folder();
+                true
+            }
+            Some(welcome::Target::Recent(index)) => {
+                if let Some(entry) = self.settings.recent.get(index) {
+                    let path = entry.path.clone();
+                    self.open_project(&path);
+                }
+                true
+            }
+            None => true,
+        }
+    }
+
+    fn welcome_hover(&mut self, x: f32, y: f32) -> bool {
+        let Some(state) = self.session.view.welcome.as_ref() else {
+            return false;
+        };
+        let layout = self.layout();
+        let window = Rect::new(
+            layout.window.x,
+            layout.titlebar.bottom(),
+            layout.window.width,
+            layout.window.bottom() - layout.titlebar.bottom(),
+        );
+        let placed = welcome::layout(window, state, self.theme.scale);
+        let target = welcome::target_at(&placed, x, y);
+
+        if let Some(state) = self.session.view.welcome.as_mut()
+            && state.hovered != target
+        {
+            state.hovered = target;
+            self.request_redraw();
+        }
+        true
+    }
+}
+
 fn actions(keymap: &Keymap) -> Vec<Action> {
     let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
+        Action::new("open-folder", "Открыть папку проекта", "Файл").hint(hint("open-folder")),
+        Action::new("welcome", "Показать стартовый экран", "Файл").hint(hint("welcome")),
         Action::new("save", "Сохранить файл", "Файл").hint(hint("save")),
         Action::new("close-tab", "Закрыть вкладку", "Файл").hint(hint("close-tab")),
         Action::new("undo", "Отменить правку", "Правка").hint(hint("undo")),

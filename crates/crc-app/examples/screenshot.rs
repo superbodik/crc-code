@@ -6,6 +6,7 @@ use crc_app::Session;
 use crc_theme::{Appearance, Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::palette::{self, Action, PaletteView};
+use crc_ui::view::welcome::{RecentEntry, WelcomeView};
 use crc_ui::view::{self, CodeMetrics};
 use crc_ui::{Offscreen, Shell, ShellState, TextRun};
 
@@ -92,7 +93,44 @@ fn main() -> anyhow::Result<()> {
             None,
             &stripped,
         ),
+        (
+            "welcome",
+            Appearance::Dark,
+            Density::Balanced,
+            false,
+            None,
+            &full,
+        ),
     ] {
+        session.view.welcome = (name == "welcome").then(|| WelcomeView {
+            recent: vec![
+                RecentEntry {
+                    name: "crc-code".into(),
+                    path: "d:/Project/CRC Code".into(),
+                    when: "12 мин назад".into(),
+                },
+                RecentEntry {
+                    name: "minedres-legal".into(),
+                    path: "d:/Project/minedress-legal".into(),
+                    when: "вчера".into(),
+                },
+                RecentEntry {
+                    name: "PrimalWorld".into(),
+                    path: "d:/Project/PrimalWorld".into(),
+                    when: "3 дн назад".into(),
+                },
+            ],
+            hints: vec![
+                (
+                    "Ctrl+K".into(),
+                    "Командная палитра — всё с клавиатуры".into(),
+                ),
+                ("Ctrl+O".into(), "Открыть другой проект".into()),
+                ("Alt+Z".into(), "Zen — панели уходят, остаётся код".into()),
+            ],
+            hovered: None,
+        });
+
         session.view.palette = query.map(|text| PaletteView {
             query: text.to_string(),
             rows: palette::filter(&actions(), text),
