@@ -11,7 +11,7 @@ pub use gpu::{
     FontKind, Frame, Gpu, Offscreen, Quad, QuadRenderer, Span, TextAlign, TextLayer, TextRun,
 };
 pub use layout::{Shell, ShellState};
-pub use view::{Band, VisibleText, bands, buffer_point, explorer_row, tab_at};
+pub use view::{Band, Mark, VisibleText, bands, buffer_point, explorer_row, tab_at};
 pub use view::{
     CodeMetrics, Edge, EditorView, FileEntry, Tab, WindowControl, control_at, control_rect,
     is_drag_handle, resize_edge,

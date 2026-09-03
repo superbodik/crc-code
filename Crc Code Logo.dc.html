@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: oklch(0.17 0.01 265); font-family: 'Archivo', Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: oklch(0.74 0.15 245); text-decoration: none; }
+  a:hover { color: oklch(0.84 0.11 245); }
+  @keyframes crccaret { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.12; } }
+</style>
+</helmet>
+
+<section style="padding: 60px 60px 110px; display: flex; flex-direction: column; gap: 44px; max-width: 1240px;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; border-bottom: 1px solid oklch(0.3 0.012 265); padding-bottom: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: oklch(0.74 0.15 245); text-transform: uppercase;">App icon · monogram</div>
+      <div style="font-size: 34px; font-weight: 900; letter-spacing: -0.025em; color: oklch(0.97 0.005 265);">Crc Code</div>
+    </div>
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.8; color: oklch(0.62 0.012 265); text-align: right;">монограмма C + каретка в блоке со срезом<br>геометрия общая с mineDres-Team, свой цвет</div>
+  </div>
+
+  <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 20px; padding: 76px 60px; display: flex; align-items: center; justify-content: center; gap: 72px;">
+    <div style="width: 168px; height: 168px; background: oklch(0.74 0.15 245); border-radius: 34px; clip-path: polygon(0 0, calc(100% - 44px) 0, 100% 44px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 9px;">
+      <div style="font-size: 96px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 4px;">C</div>
+      <div style="width: 11px; height: 74px; background: oklch(0.14 0.01 265); animation: crccaret 1.1s steps(1, end) infinite;"></div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 16px; max-width: 320px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: oklch(0.74 0.15 245); text-transform: uppercase;">Логика знака</div>
+      <div style="font-size: 15px; line-height: 1.65; color: oklch(0.78 0.01 265); text-wrap: pretty;">C — от Crc. Каретка рядом говорит, что это редактор, а срез угла — что это файл кода. В маленьких размерах каретка становится вторым штрихом монограммы, силуэт остаётся узнаваемым.</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 18px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: oklch(0.62 0.012 265); text-transform: uppercase;">Размерный ряд</div>
+    <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 20px; padding: 40px; display: flex; align-items: flex-end; gap: 40px; flex-wrap: wrap;">
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="width: 112px; height: 112px; background: oklch(0.74 0.15 245); border-radius: 23px; clip-path: polygon(0 0, calc(100% - 29px) 0, 100% 29px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <div style="font-size: 64px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 3px;">C</div>
+          <div style="width: 7px; height: 49px; background: oklch(0.14 0.01 265);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">128</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="width: 64px; height: 64px; background: oklch(0.74 0.15 245); border-radius: 13px; clip-path: polygon(0 0, calc(100% - 17px) 0, 100% 17px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 3px;">
+          <div style="font-size: 37px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 2px;">C</div>
+          <div style="width: 4px; height: 28px; background: oklch(0.14 0.01 265);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">64</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="width: 32px; height: 32px; background: oklch(0.74 0.15 245); border-radius: 7px; clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 2px;">
+          <div style="font-size: 19px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 1px;">C</div>
+          <div style="width: 2px; height: 14px; background: oklch(0.14 0.01 265);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">32</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="width: 16px; height: 16px; background: oklch(0.74 0.15 245); border-radius: 3px; display: flex; align-items: center; justify-content: center; gap: 1px;">
+          <div style="font-size: 11px; font-weight: 900; letter-spacing: -0.07em; line-height: 1; color: oklch(0.14 0.01 265);">C</div>
+          <div style="width: 2px; height: 8px; background: oklch(0.14 0.01 265);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">16 · срез убран</div>
+      </div>
+
+      <div style="width: 1px; height: 96px; background: oklch(0.28 0.012 265);"></div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="width: 64px; height: 64px; background: oklch(0.16 0.01 265); border-radius: 13px; clip-path: polygon(0 0, calc(100% - 17px) 0, 100% 17px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 3px;">
+          <div style="font-size: 37px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.97 0.005 265); padding-bottom: 2px;">C</div>
+          <div style="width: 4px; height: 28px; background: oklch(0.74 0.15 245);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">тёмная</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 14px;">
+        <div style="width: 64px; height: 64px; background: oklch(0.94 0.005 265); border-radius: 13px; clip-path: polygon(0 0, calc(100% - 17px) 0, 100% 17px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 3px;">
+          <div style="font-size: 37px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.19 0.01 265); padding-bottom: 2px;">C</div>
+          <div style="width: 4px; height: 28px; background: oklch(0.19 0.01 265);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">монохром / печать</div>
+      </div>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ showApplications }}" hint-placeholder-val="{{ true }}">
+  <div style="display: flex; flex-direction: column; gap: 18px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: oklch(0.62 0.012 265); text-transform: uppercase;">Применение</div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+
+      <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column;">
+        <div style="display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: oklch(0.2 0.012 265); border-bottom: 1px solid oklch(0.28 0.012 265);">
+          <div style="display: flex; gap: 7px;">
+            <div style="width: 11px; height: 11px; border-radius: 50%; background: oklch(0.64 0.14 25);"></div>
+            <div style="width: 11px; height: 11px; border-radius: 50%; background: oklch(0.78 0.13 85);"></div>
+            <div style="width: 11px; height: 11px; border-radius: 50%; background: oklch(0.74 0.14 150);"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px; margin-left: 8px;">
+            <div style="width: 18px; height: 18px; background: oklch(0.74 0.15 245); border-radius: 4px; display: flex; align-items: center; justify-content: center; gap: 1px;">
+              <div style="font-size: 12px; font-weight: 900; letter-spacing: -0.07em; line-height: 1; color: oklch(0.14 0.01 265);">C</div>
+              <div style="width: 2px; height: 9px; background: oklch(0.14 0.01 265);"></div>
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: oklch(0.8 0.008 265);">main.py — crc-code</div>
+          </div>
+        </div>
+        <div style="padding: 22px; display: flex; flex-direction: column; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6;">
+          <div style="display: flex; gap: 16px;"><span style="color: oklch(0.45 0.012 265);">1</span><span style="color: oklch(0.74 0.15 245);">def</span><span style="color: oklch(0.9 0.005 265);">checksum(data):</span></div>
+          <div style="display: flex; gap: 16px;"><span style="color: oklch(0.45 0.012 265);">2</span><span style="color: oklch(0.68 0.012 265); padding-left: 18px;">return crc32(data)</span></div>
+          <div style="display: flex; gap: 16px; align-items: center;"><span style="color: oklch(0.45 0.012 265);">3</span><span style="width: 2px; height: 17px; background: oklch(0.74 0.15 245); margin-left: 18px; animation: crccaret 1.1s steps(1, end) infinite;"></span></div>
+        </div>
+        <div style="padding: 14px 22px; border-top: 1px solid oklch(0.28 0.012 265); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">заголовок окна — знак 18px, срез убран</div>
+      </div>
+
+      <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; justify-content: space-between; gap: 26px;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; border-radius: 18px; background: oklch(0.22 0.012 265); border: 1px solid oklch(0.3 0.012 265);">
+          <div style="width: 20px; height: 20px; border-radius: 5px; background: oklch(0.42 0.012 265);"></div>
+          <div style="width: 20px; height: 20px; border-radius: 5px; background: oklch(0.42 0.012 265);"></div>
+          <div style="width: 38px; height: 38px; background: oklch(0.74 0.15 245); border-radius: 9px; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 2px;">
+            <div style="font-size: 22px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 1px;">C</div>
+            <div style="width: 3px; height: 17px; background: oklch(0.14 0.01 265);"></div>
+          </div>
+          <div style="width: 20px; height: 20px; border-radius: 5px; background: oklch(0.42 0.012 265);"></div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">док / таскбар — активная иконка</div>
+      </div>
+
+      <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; justify-content: space-between; gap: 26px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="width: 56px; height: 56px; border-radius: 50%; background: oklch(0.74 0.15 245); display: flex; align-items: center; justify-content: center; gap: 2px;">
+            <div style="font-size: 30px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 2px;">C</div>
+            <div style="width: 4px; height: 22px; background: oklch(0.14 0.01 265);"></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <div style="font-size: 14px; font-weight: 700; color: oklch(0.97 0.005 265);">Crc Code</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.62 0.012 265);">github · superbodik</div>
+          </div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.56 0.012 265);">аватар репозитория / соцсети</div>
+      </div>
+
+      <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; justify-content: space-between; gap: 26px;">
+        <div style="display: flex; align-items: center; gap: 26px;">
+          <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="width: 44px; height: 44px; background: oklch(0.74 0.15 245); border-radius: 9px; clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center; gap: 2px;">
+              <div style="font-size: 25px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265); padding-bottom: 1px;">C</div>
+              <div style="width: 3px; height: 19px; background: oklch(0.14 0.01 265);"></div>
+            </div>
+          </div>
+          <div style="width: 1px; height: 44px; background: oklch(0.3 0.012 265);"></div>
+          <div style="width: 44px; height: 44px; background: oklch(0.74 0.15 168); border-radius: 4px; clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); display: flex; align-items: center; justify-content: center;">
+            <div style="font-size: 21px; font-weight: 900; letter-spacing: -0.06em; line-height: 1; color: oklch(0.14 0.01 265);">mD</div>
+          </div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.7; color: oklch(0.56 0.012 265);">семья: одна геометрия и типографика с mineDres-Team, разный цвет</div>
+      </div>
+
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ showSpecs }}" hint-placeholder-val="{{ true }}">
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: oklch(0.62 0.012 265); text-transform: uppercase;">Цвет</div>
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 54px; border-radius: 8px; background: oklch(0.74 0.15 245);"></div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.62 0.012 265); white-space: nowrap;">#4AA8FF<br><span style="font-size: 9px;">oklch(.74 .15 245)</span></div>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 54px; border-radius: 8px; background: oklch(0.14 0.01 265); border: 1px solid oklch(0.3 0.012 265);"></div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.62 0.012 265); white-space: nowrap;">#14171C<br><span style="font-size: 9px;">oklch(.14 .01 265)</span></div>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+          <div style="height: 54px; border-radius: 8px; background: oklch(0.74 0.15 168);"></div>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: oklch(0.62 0.012 265); white-space: nowrap;">mineDres<br><span style="font-size: 9px;">oklch(.74 .15 168)</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="background: oklch(0.13 0.01 265); border: 1px solid oklch(0.28 0.012 265); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: oklch(0.62 0.012 265); text-transform: uppercase;">Построение</div>
+      <div style="display: flex; flex-direction: column; gap: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.75; color: oklch(0.7 0.01 265);">
+        <div>срез угла = 26% стороны блока</div>
+        <div>радиус = 20% стороны (0 при 16px)</div>
+        <div>каретка = 6.5% ширины, 44% высоты</div>
+        <div>монограмма — Archivo 900, tracking −0.06em</div>
+        <div style="border-top: 1px solid oklch(0.28 0.012 265); padding-top: 12px; color: oklch(0.56 0.012 265);">свободное поле вокруг знака — 12% стороны</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showApplications&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Состав страницы&quot;},&quot;showSpecs&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Состав страницы&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showApplications: this.props.showApplications ?? true,
+      showSpecs: this.props.showSpecs ?? true,
+    };
+  }
+}
+</script>
+</body>
+</html>

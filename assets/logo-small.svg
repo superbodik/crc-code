@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="16" height="16" role="img" aria-label="CRC Code">
+  <title>CRC Code</title>
+  <rect x="0" y="0" width="64" height="64" rx="12.8" fill="#4AA8FF"/>
+  <text x="26.4" y="45.8" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', 'Arial Black', sans-serif" font-size="36.5" font-weight="900" letter-spacing="-2.2" fill="#14171C">C</text>
+  <rect x="41.4" y="17.9" width="4.16" height="28.16" fill="#14171C"/>
+</svg>

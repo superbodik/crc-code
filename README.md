@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.svg" width="88" height="88" alt="">
+
 # CRC Code
 
 **A GPU-native code editor with an AI agent built in.**
@@ -9,7 +11,7 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 [![Rust](https://img.shields.io/badge/Rust-1.96%2B-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![wgpu](https://img.shields.io/badge/wgpu-30-7c5cff)](https://wgpu.rs)
 [![tree-sitter](https://img.shields.io/badge/tree--sitter-12%20languages-4a7d5f)](https://tree-sitter.github.io)
-[![Tests](https://img.shields.io/badge/tests-233%20passing-3d6b50)](#testing)
+[![Tests](https://img.shields.io/badge/tests-245%20passing-3d6b50)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-2f6ba8)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-b0873f)]()
 
@@ -136,9 +138,26 @@ colour, ink in the buffer, the caret on the cursor line.
 cargo test --workspace
 ```
 
-233 tests. The interesting ones do not mock: contrast ratios are computed from
+245 tests. The interesting ones do not mock: contrast ratios are computed from
 the actual palette, grammars are loaded and real snippets parsed, and frames are
 rendered on the real GPU and read back pixel by pixel.
+
+## The mark
+
+<img src="assets/logo.svg" width="56" height="56" alt=""> <img src="assets/logo-dark.svg" width="56" height="56" alt=""> <img src="assets/logo-mono.svg" width="56" height="56" alt="">
+
+A C for CRC, a caret beside it because this is an editor, and a cut corner
+because the block is a file of code. Everything about it is a percentage of one
+side — corner cut 26%, radius 20%, caret 6.5% by 44%, clear space 12% — so the
+same numbers drive [the SVG assets](assets/) and the mark the editor draws
+itself in its own title bar. Below 24px the cut goes and the caret becomes the
+second stroke of the monogram.
+
+It shares its geometry and its lightness with the
+[mineDres Team](https://minedres-team.github.io/legal/) mark, and differs only
+in hue: `#4AA8FF` against the team's `#00C48F`. Tests hold both halves of that —
+the proportions at every size in the ramp, and the two marks reading at the same
+weight.
 
 ## Built with an agent
 

@@ -1,9 +1,10 @@
-use crc_theme::{CONTROL_RING, Rgba, Theme, Weight};
+use crc_theme::{Brand, CONTROL_RING, Rgba, Theme, Weight};
 
 use crate::geometry::Rect;
 use crate::gpu::{Frame, Quad, Span, TextAlign, TextRun};
 use crate::layout::Shell;
 use crate::view::controls::{WindowControl, control_rect};
+use crate::view::logo;
 use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 
@@ -68,6 +69,23 @@ fn titlebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView)
                 .bordered(1.0, fill.shade(CONTROL_RING)),
         );
     }
+
+    let side = (bar.height * 0.45).round();
+    let controls_end = control_rect(bar, WindowControl::Maximize).right();
+    let mark = logo::mark(
+        side,
+        controls_end + logo::clear_space(side) + 14.0,
+        bar.y + (bar.height - side) / 2.0,
+    );
+    logo::draw(
+        frame,
+        mark,
+        if theme.appearance == crc_theme::Appearance::Dark {
+            Brand::on_dark()
+        } else {
+            Brand::colour()
+        },
+    );
 
     let label = if view.branch.is_empty() {
         view.project.clone()

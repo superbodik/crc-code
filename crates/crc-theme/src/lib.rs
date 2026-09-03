@@ -1,3 +1,4 @@
+pub mod brand;
 pub mod chrome;
 pub mod color;
 pub mod density;
@@ -7,6 +8,7 @@ pub mod syntax;
 pub mod theme;
 pub mod typography;
 
+pub use brand::Brand;
 pub use chrome::{CONTROL_RING, Chrome};
 pub use color::Rgba;
 pub use density::{Affordances, Density, Metrics};
