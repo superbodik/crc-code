@@ -634,3 +634,186 @@ mod searching {
         assert!(state.touched());
     }
 }
+
+mod missing_the_target {
+    use super::*;
+
+    #[test]
+    fn empty_space_inside_the_panel_is_not_the_same_as_outside_it() {
+        let state = view();
+        let placed = settings::layout(window(), &state, 1.0);
+
+        let gap_x = placed.body.x + 40.0;
+        let gap_y = placed.rows.last().unwrap().bottom() + 20.0;
+
+        assert_eq!(
+            settings::target_at(&placed, &state, gap_x, gap_y),
+            None,
+            "there is nothing to press down there"
+        );
+        assert!(
+            placed.panel.contains(gap_x, gap_y),
+            "but it is still inside the panel, so the panel must stay open"
+        );
+
+        let outside = (placed.panel.x - 30.0, placed.panel.y + 40.0);
+        assert_eq!(settings::target_at(&placed, &state, outside.0, outside.1), None);
+        assert!(
+            !placed.panel.contains(outside.0, outside.1),
+            "outside is what dismisses the panel"
+        );
+    }
+
+    #[test]
+    fn the_gap_between_a_label_and_its_switch_still_belongs_to_the_row() {
+        let state = view();
+        let placed = settings::layout(window(), &state, 1.0);
+        let row = placed.rows[1];
+
+        assert_eq!(
+            settings::target_at(&placed, &state, row.x + row.width * 0.6, row.y + row.height / 2.0),
+            Some(Target::Toggle(1)),
+            "the whole row is the target, not just the switch"
+        );
+    }
+
+    #[test]
+    fn the_sidebar_below_the_sections_presses_nothing() {
+        let state = view();
+        let placed = settings::layout(window(), &state, 1.0);
+        let below = placed.sections.last().unwrap().bottom() + 40.0;
+
+        assert_eq!(
+            settings::target_at(&placed, &state, placed.sidebar.x + 20.0, below),
+            None
+        );
+    }
+}
+
+mod windows_switches {
+    use super::*;
+    use crc_theme::{Rgba, Theme};
+
+    const WIDTH: u32 = 1100;
+    const HEIGHT: u32 = 820;
+
+    fn near(a: Rgba, b: Rgba) -> bool {
+        a.r.abs_diff(b.r) <= 3 && a.g.abs_diff(b.g) <= 3 && a.b.abs_diff(b.b) <= 3
+    }
+
+    fn switch_area(row: Rect, scale: f32) -> Rect {
+        Rect::new(
+            row.right() - 48.0 * scale,
+            row.y,
+            48.0 * scale,
+            row.height,
+        )
+    }
+
+    #[test]
+    fn a_switch_that_is_off_is_an_outline_with_a_dot_not_a_filled_track() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::dark();
+        let layout = Shell::compute(
+            Rect::from_size(WIDTH as f32, HEIGHT as f32),
+            &theme,
+            &ShellState::default(),
+        );
+        let state = view();
+
+        let pixels = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &EditorView {
+                settings: Some(state.clone()),
+                ..EditorView::default()
+            },
+            CodeMetrics::default(),
+        ));
+
+        let placed = settings::layout(layout.window, &state, theme.scale);
+        let off = switch_area(placed.rows[1], theme.scale);
+
+        assert!(
+            canvas.count_pixels(&pixels, off, |c| near(c, theme.chrome.selected)) < 40,
+            "the off track should not be a filled slab"
+        );
+        assert!(
+            canvas.count_pixels(&pixels, off, |c| near(c, theme.chrome.surface)) > 400,
+            "the off track is the panel colour behind a ring"
+        );
+        assert!(
+            canvas.count_pixels(&pixels, off, |c| near(c, theme.chrome.text)) > 40,
+            "the off state still shows its dot"
+        );
+    }
+
+    #[test]
+    fn a_switch_that_is_on_fills_with_the_accent_and_keeps_a_pale_dot() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::dark();
+        let layout = Shell::compute(
+            Rect::from_size(WIDTH as f32, HEIGHT as f32),
+            &theme,
+            &ShellState::default(),
+        );
+        let state = view();
+
+        let pixels = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &EditorView {
+                settings: Some(state.clone()),
+                ..EditorView::default()
+            },
+            CodeMetrics::default(),
+        ));
+
+        let placed = settings::layout(layout.window, &state, theme.scale);
+        let on = switch_area(placed.rows[0], theme.scale);
+
+        assert!(
+            canvas.count_pixels(&pixels, on, |c| near(c, theme.chrome.accent_solid)) > 400,
+            "the on track is filled"
+        );
+        assert!(
+            canvas.count_pixels(&pixels, on, |c| near(c, theme.chrome.raised)) > 40,
+            "the dot sits on the fill"
+        );
+    }
+
+    #[test]
+    fn the_dot_moves_from_one_end_to_the_other() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::dark();
+        let layout = Shell::compute(
+            Rect::from_size(WIDTH as f32, HEIGHT as f32),
+            &theme,
+            &ShellState::default(),
+        );
+        let state = view();
+
+        let pixels = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &EditorView {
+                settings: Some(state.clone()),
+                ..EditorView::default()
+            },
+            CodeMetrics::default(),
+        ));
+
+        let placed = settings::layout(layout.window, &state, theme.scale);
+        let area = switch_area(placed.rows[1], theme.scale);
+        let half = area.width / 2.0;
+
+        let left = Rect::new(area.x, area.y, half, area.height);
+        let right = Rect::new(area.x + half, area.y, half, area.height);
+        let dot = |c: Rgba| near(c, theme.chrome.text);
+
+        assert!(
+            canvas.count_pixels(&pixels, left, dot) > canvas.count_pixels(&pixels, right, dot),
+            "an off switch keeps its dot on the left"
+        );
+    }
+}

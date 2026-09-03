@@ -433,3 +433,128 @@ mod selecting {
         assert_eq!(doc.text(), "new");
     }
 }
+
+mod whole_words {
+    use super::*;
+
+    #[test]
+    fn ctrl_backspace_takes_the_word_behind_the_cursor() {
+        let mut doc = plain("hello brave world");
+        doc.move_cursor(Motion::To(11), false);
+
+        doc.delete_word(false);
+
+        assert_eq!(doc.text(), "hello  world", "the word goes, its spacing stays");
+        assert_eq!(doc.selection(), Selection::cursor(6));
+    }
+
+    #[test]
+    fn standing_past_the_space_takes_the_space_with_the_word() {
+        let mut doc = plain("hello brave world");
+        doc.move_cursor(Motion::To(12), false);
+
+        doc.delete_word(false);
+
+        assert_eq!(doc.text(), "hello world");
+        assert_eq!(doc.selection(), Selection::cursor(6));
+    }
+
+    #[test]
+    fn ctrl_delete_takes_the_word_in_front() {
+        let mut doc = plain("hello brave world");
+        doc.move_cursor(Motion::To(6), false);
+
+        doc.delete_word(true);
+
+        assert_eq!(doc.text(), "hello  world");
+        assert_eq!(doc.selection(), Selection::cursor(6));
+    }
+
+    #[test]
+    fn a_selection_wins_over_the_word() {
+        let mut doc = plain("hello brave world");
+        doc.move_cursor(Motion::To(0), false);
+        doc.move_cursor(Motion::To(5), true);
+
+        doc.delete_word(false);
+
+        assert_eq!(doc.text(), " brave world");
+        assert_eq!(doc.selection(), Selection::cursor(0));
+    }
+
+    #[test]
+    fn the_start_of_the_file_is_not_a_word() {
+        let mut doc = plain("hello");
+        doc.move_cursor(Motion::To(0), false);
+
+        doc.delete_word(false);
+
+        assert_eq!(doc.text(), "hello");
+    }
+
+    #[test]
+    fn the_end_of_the_file_is_not_a_word_either() {
+        let mut doc = plain("hello");
+        doc.move_cursor(Motion::To(5), false);
+
+        doc.delete_word(true);
+
+        assert_eq!(doc.text(), "hello");
+    }
+
+    #[test]
+    fn taking_a_word_can_be_undone_in_one_step() {
+        let mut doc = plain("hello brave world");
+        doc.move_cursor(Motion::To(11), false);
+        doc.delete_word(false);
+        doc.commit();
+
+        assert!(doc.undo());
+        assert_eq!(doc.text(), "hello brave world");
+    }
+}
+
+mod carrying_text {
+    use super::*;
+
+    #[test]
+    fn a_selection_is_what_gets_copied() {
+        let mut doc = plain("hello world");
+        doc.move_cursor(Motion::To(6), false);
+        doc.move_cursor(Motion::To(11), true);
+
+        assert_eq!(doc.selected_text().as_deref(), Some("world"));
+    }
+
+    #[test]
+    fn nothing_selected_means_nothing_to_copy() {
+        let doc = plain("hello world");
+
+        assert_eq!(doc.selected_text(), None);
+    }
+
+    #[test]
+    fn with_no_selection_the_whole_line_is_offered() {
+        let mut doc = plain("first line\nsecond line\nthird line");
+        doc.move_cursor(Motion::To(14), false);
+
+        assert_eq!(doc.line_text(), "second line\n");
+    }
+
+    #[test]
+    fn the_last_line_still_ends_with_a_break() {
+        let mut doc = plain("only line");
+        doc.move_cursor(Motion::To(3), false);
+
+        assert_eq!(doc.line_text(), "only line\n");
+    }
+
+    #[test]
+    fn a_copied_selection_reads_back_across_line_ends() {
+        let mut doc = plain("first\nsecond");
+        doc.move_cursor(Motion::To(3), false);
+        doc.move_cursor(Motion::To(8), true);
+
+        assert_eq!(doc.selected_text().as_deref(), Some("st\nse"));
+    }
+}

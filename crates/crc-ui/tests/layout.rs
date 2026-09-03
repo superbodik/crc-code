@@ -271,3 +271,37 @@ mod rects {
         );
     }
 }
+
+#[test]
+fn the_shell_holds_together_when_the_window_is_squeezed_to_nothing() {
+    for (width, height) in [
+        (160.0, 28.0),
+        (1.0, 1.0),
+        (0.0, 0.0),
+        (40.0, 900.0),
+        (900.0, 12.0),
+    ] {
+        let layout = Shell::compute(
+            Rect::from_size(width, height),
+            &Theme::dark(),
+            &ShellState::default(),
+        );
+
+        for (name, rect) in [
+            ("window", layout.window),
+            ("titlebar", layout.titlebar),
+            ("buffer", layout.buffer),
+            ("gutter", layout.gutter),
+            ("tabs", layout.tabs),
+        ] {
+            assert!(
+                rect.width >= 0.0 && rect.height >= 0.0,
+                "{name} went negative at {width}x{height}: {rect:?}"
+            );
+            assert!(
+                rect.width.is_finite() && rect.height.is_finite(),
+                "{name} stopped being a number at {width}x{height}"
+            );
+        }
+    }
+}

@@ -13,7 +13,7 @@ use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{Key, ModifiersState, NamedKey};
+use winit::keyboard::{Key, ModifiersState, NamedKey, PhysicalKey};
 use winit::window::{CursorIcon, ResizeDirection, Window, WindowId};
 
 use crate::input::{Command, command_named, resolve};
@@ -39,6 +39,7 @@ pub struct App {
     keymap: Keymap,
     frames: u32,
     smoke: bool,
+    clipboard: Option<arboard::Clipboard>,
 }
 
 impl App {
@@ -90,6 +91,7 @@ impl App {
             keymap,
             frames: 0,
             smoke,
+            clipboard: None,
         }
     }
 
@@ -136,6 +138,15 @@ impl App {
     }
 
     fn redraw(&mut self) {
+        if self
+            .window
+            .as_ref()
+            .and_then(|window| window.is_minimized())
+            .unwrap_or(false)
+        {
+            return;
+        }
+
         let layout = self.layout();
         let frame = view::draw(&layout, &self.theme, &self.session.view, self.metrics);
 
@@ -165,6 +176,15 @@ impl App {
             Command::OpenFolder => self.pick_folder(),
             Command::ShowWelcome => self.show_welcome(),
             Command::OpenSettings => self.toggle_settings(),
+            Command::Copy => self.copy(false),
+            Command::Cut => self.copy(true),
+            Command::Paste => self.paste(),
+            Command::DeleteWord { forward } => {
+                if let Some(document) = self.session.document() {
+                    document.delete_word(forward);
+                    self.touched();
+                }
+            }
             Command::CloseTab => {
                 if let Some(index) = self.session.active_tab() {
                     self.session.close_tab(index);
@@ -366,6 +386,15 @@ impl App {
             return;
         };
 
+        if let Some(control) = view::control_at(layout.titlebar, x, y) {
+            match control {
+                WindowControl::Close => event_loop.exit(),
+                WindowControl::Minimize => window.set_minimized(true),
+                WindowControl::Maximize => self.toggle_maximized(),
+            }
+            return;
+        }
+
         if !window.is_maximized()
             && let Some(edge) = view::resize_edge(self.window_rect(), x, y, self.resize_margin())
         {
@@ -380,15 +409,6 @@ impl App {
                 Edge::BottomRight => ResizeDirection::SouthEast,
             };
             let _ = window.drag_resize_window(direction);
-            return;
-        }
-
-        if let Some(control) = view::control_at(layout.titlebar, x, y) {
-            match control {
-                WindowControl::Close => event_loop.exit(),
-                WindowControl::Minimize => window.set_minimized(true),
-                WindowControl::Maximize => self.toggle_maximized(),
-            }
             return;
         }
 
@@ -575,6 +595,15 @@ impl ApplicationHandler for App {
                 self.request_redraw();
             }
             WindowEvent::Resized(size) => {
+                let minimized = self
+                    .window
+                    .as_ref()
+                    .and_then(|window| window.is_minimized())
+                    .unwrap_or(false);
+
+                if minimized || size.width == 0 || size.height == 0 {
+                    return;
+                }
                 if let Some(renderer) = self.renderer.as_mut() {
                     renderer.resize(size.width, size.height);
                 }
@@ -587,16 +616,17 @@ impl ApplicationHandler for App {
                 event:
                     KeyEvent {
                         logical_key,
+                        physical_key,
                         state: ElementState::Pressed,
                         ..
                     },
                 ..
             } => {
                 if self.session.view.settings.is_some() {
-                    self.settings_key(&logical_key);
+                    self.settings_key(&logical_key, physical_key);
                 } else if self.session.view.palette.is_some() {
                     self.palette_key(&logical_key, event_loop);
-                } else if let Some(command) = self.command_for(&logical_key) {
+                } else if let Some(command) = self.command_for(&logical_key, physical_key) {
                     self.apply(command, event_loop);
                 }
                 self.request_redraw();
@@ -619,8 +649,67 @@ impl ApplicationHandler for App {
 }
 
 impl App {
-    fn command_for(&self, key: &Key) -> Option<Command> {
-        resolve(key, self.modifiers, self.rows(), &self.keymap)
+    fn command_for(&self, key: &Key, physical: PhysicalKey) -> Option<Command> {
+        resolve(key, physical, self.modifiers, self.rows(), &self.keymap)
+    }
+
+    fn clipboard(&mut self) -> Option<&mut arboard::Clipboard> {
+        if self.clipboard.is_none() {
+            match arboard::Clipboard::new() {
+                Ok(clipboard) => self.clipboard = Some(clipboard),
+                Err(error) => {
+                    tracing::warn!("no clipboard: {error}");
+                    return None;
+                }
+            }
+        }
+        self.clipboard.as_mut()
+    }
+
+    fn copy(&mut self, cut: bool) {
+        let Some(document) = self.session.document() else {
+            return;
+        };
+        let taken = match document.selected_text() {
+            Some(text) => text,
+            None => document.line_text(),
+        };
+        if taken.is_empty() {
+            return;
+        }
+
+        if cut && let Some(document) = self.session.document() {
+            document.backspace();
+            self.touched();
+        }
+
+        if let Some(clipboard) = self.clipboard()
+            && let Err(error) = clipboard.set_text(taken)
+        {
+            tracing::warn!("clipboard would not take the text: {error}");
+        }
+    }
+
+    fn paste(&mut self) {
+        let Some(clipboard) = self.clipboard() else {
+            return;
+        };
+        let text = match clipboard.get_text() {
+            Ok(text) => text,
+            Err(error) => {
+                tracing::warn!("nothing to paste: {error}");
+                return;
+            }
+        };
+        if text.is_empty() {
+            return;
+        }
+
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        if let Some(document) = self.session.document() {
+            document.insert(&text);
+            self.touched();
+        }
     }
 
     fn store(&mut self) {
@@ -971,7 +1060,7 @@ impl App {
         self.store();
     }
 
-    fn settings_key(&mut self, key: &Key) {
+    fn settings_key(&mut self, key: &Key, physical: PhysicalKey) {
         let capturing = self
             .session
             .view
@@ -980,7 +1069,7 @@ impl App {
             .and_then(|state| state.capturing);
 
         let Some(index) = capturing else {
-            self.browse_keys(key);
+            self.browse_keys(key, physical);
             return;
         };
 
@@ -991,7 +1080,7 @@ impl App {
             return;
         }
 
-        let Some(chord) = crate::input::chord(key, self.modifiers) else {
+        let Some(chord) = crate::input::chord(key, physical, self.modifiers) else {
             return;
         };
 
@@ -1050,7 +1139,12 @@ impl App {
         let placed = settings_view::layout(self.layout().window, state, self.theme.scale);
 
         match settings_view::target_at(&placed, state, x, y) {
-            Some(settings_view::Target::Close) | None => self.session.view.settings = None,
+            Some(settings_view::Target::Close) => self.session.view.settings = None,
+            None => {
+                if !placed.panel.contains(x, y) {
+                    self.session.view.settings = None;
+                }
+            }
             Some(settings_view::Target::Section(index)) => {
                 if let Some(section) = settings_view::Section::ALL.get(index).copied()
                     && let Some(state) = self.session.view.settings.as_mut()
@@ -1116,13 +1210,13 @@ impl App {
 
 
 impl App {
-    fn browse_keys(&mut self, key: &Key) {
+    fn browse_keys(&mut self, key: &Key, physical: PhysicalKey) {
         if matches!(key, Key::Named(NamedKey::Escape)) {
             self.session.view.settings = None;
             return;
         }
 
-        if let Some(chord) = crate::input::chord(key, self.modifiers)
+        if let Some(chord) = crate::input::chord(key, physical, self.modifiers)
             && self.keymap.command(&chord) == Some("settings")
         {
             self.session.view.settings = None;
@@ -1170,6 +1264,13 @@ fn actions(keymap: &Keymap) -> Vec<Action> {
     vec![
         Action::new("open-folder", "Открыть папку проекта", "Файл").hint(hint("open-folder")),
         Action::new("settings", "Настройки", "Вид").hint(hint("settings")),
+        Action::new("copy", "Копировать", "Правка").hint(hint("copy")),
+        Action::new("cut", "Вырезать", "Правка").hint(hint("cut")),
+        Action::new("paste", "Вставить", "Правка").hint(hint("paste")),
+        Action::new("delete-word-back", "Удалить слово слева", "Правка")
+            .hint(hint("delete-word-back")),
+        Action::new("delete-word-forward", "Удалить слово справа", "Правка")
+            .hint(hint("delete-word-forward")),
         Action::new("welcome", "Показать стартовый экран", "Файл").hint(hint("welcome")),
         Action::new("save", "Сохранить файл", "Файл").hint(hint("save")),
         Action::new("close-tab", "Закрыть вкладку", "Файл").hint(hint("close-tab")),

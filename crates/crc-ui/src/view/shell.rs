@@ -1094,7 +1094,8 @@ fn settings_panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &Edito
                 };
                 let index = shown[offset + state.scroll];
 
-                if state.hovered == Some(settings_view::Target::Toggle(index)) {
+                let hovered = state.hovered == Some(settings_view::Target::Toggle(index));
+                if hovered {
                     frame.overlay_quad(
                         Quad::filled(*rect, theme.chrome.hover)
                             .rounded(metrics.corner_radius_small),
@@ -1132,36 +1133,43 @@ fn settings_panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &Edito
 
                 let track = Rect::new(
                     rect.right() - 46.0 * scale,
-                    rect.y + (rect.height - 22.0 * scale) / 2.0,
+                    rect.y + (rect.height - 20.0 * scale) / 2.0,
                     40.0 * scale,
-                    22.0 * scale,
+                    20.0 * scale,
                 );
-                frame.overlay_quad(
-                    Quad::filled(
-                        track,
-                        if toggle.on {
-                            theme.chrome.accent_solid
+                let switch = if toggle.on {
+                    Quad::filled(track, theme.chrome.accent_solid)
+                } else {
+                    Quad::filled(track, theme.chrome.surface).bordered(
+                        metrics.border_width,
+                        if hovered {
+                            theme.chrome.text
                         } else {
-                            theme.chrome.selected
+                            theme.chrome.text_faint
                         },
                     )
-                    .rounded(track.height / 2.0),
-                );
+                };
+                frame.overlay_quad(switch.rounded(track.height / 2.0));
 
-                let knob = 16.0 * scale;
+                let knob = if hovered { 14.0 } else { 12.0 } * scale;
+                let centre = if toggle.on {
+                    track.right() - 10.0 * scale
+                } else {
+                    track.x + 10.0 * scale
+                };
                 frame.overlay_quad(
                     Quad::filled(
                         Rect::new(
-                            if toggle.on {
-                                track.right() - knob - 3.0 * scale
-                            } else {
-                                track.x + 3.0 * scale
-                            },
+                            centre - knob / 2.0,
                             track.y + (track.height - knob) / 2.0,
                             knob,
                             knob,
                         ),
-                        theme.chrome.raised,
+                        if toggle.on {
+                            theme.chrome.raised
+                        } else {
+                            theme.chrome.text
+                        },
                     )
                     .rounded(knob / 2.0),
                 );

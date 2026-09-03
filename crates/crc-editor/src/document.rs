@@ -140,6 +140,41 @@ impl Document {
         self.place(head, false);
     }
 
+    pub fn delete_word(&mut self, forward: bool) {
+        if !self.selection.is_empty() {
+            self.backspace();
+            return;
+        }
+
+        let head = self.selection.head;
+        let target = self.word_boundary(head, if forward { 1 } else { -1 });
+        if target == head {
+            return;
+        }
+
+        let (start, end) = if forward {
+            (head, target)
+        } else {
+            (target, head)
+        };
+        self.replace(start..end, "");
+        self.place(start, false);
+    }
+
+    pub fn selected_text(&self) -> Option<String> {
+        self.selected_bytes().map(|range| self.text[range].to_string())
+    }
+
+    pub fn line_text(&self) -> String {
+        let point = self.buffer.offset_to_point(self.selection.head);
+        let start = self.buffer.line_start(point.line);
+        let end = start + self.buffer.line_len(point.line);
+        let bytes = self.buffer.char_to_byte(start)..self.buffer.char_to_byte(end);
+        let mut line = self.text[bytes].to_string();
+        line.push('\n');
+        line
+    }
+
     pub fn undo(&mut self) -> bool {
         self.reshape(|buffer| buffer.undo().is_some())
     }
