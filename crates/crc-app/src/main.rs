@@ -1,13 +1,8 @@
-mod app;
-mod input;
-mod session;
+use crc_app::{App, Session};
 
 use std::path::PathBuf;
 
 use winit::event_loop::{ControlFlow, EventLoop};
-
-use crate::app::App;
-use crate::session::Session;
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()

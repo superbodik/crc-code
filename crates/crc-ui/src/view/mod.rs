@@ -1,4 +1,5 @@
 pub mod controls;
+pub mod explorer;
 pub mod hit;
 pub mod logo;
 pub mod selection;
@@ -7,6 +8,7 @@ pub mod state;
 pub mod tabs;
 
 pub use controls::{Edge, WindowControl, control_at, control_rect, is_drag_handle, resize_edge};
+pub use explorer::tree;
 pub use hit::{buffer_point, explorer_header_height, explorer_row};
 pub use logo::{Mark, clear_space, mark};
 pub use selection::{Band, bands};

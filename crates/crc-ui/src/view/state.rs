@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::path::PathBuf;
 
 use crc_theme::Highlight;
 
@@ -38,6 +39,7 @@ pub struct FileEntry {
     pub is_dir: bool,
     pub selected: bool,
     pub modified: bool,
+    pub path: Option<PathBuf>,
 }
 
 impl FileEntry {
@@ -48,6 +50,7 @@ impl FileEntry {
             is_dir: false,
             selected: false,
             modified: false,
+            path: None,
         }
     }
 
@@ -58,6 +61,7 @@ impl FileEntry {
             is_dir: true,
             selected: false,
             modified: false,
+            path: None,
         }
     }
 
@@ -68,6 +72,11 @@ impl FileEntry {
 
     pub fn modified(mut self) -> Self {
         self.modified = true;
+        self
+    }
+
+    pub fn at(mut self, path: impl Into<PathBuf>) -> Self {
+        self.path = Some(path.into());
         self
     }
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crc_core::{Engine, Limits};
 use crc_editor::{Document, Documents};
-use crc_ui::view::{EditorView, FileEntry, Tab};
+use crc_ui::view::{EditorView, Tab};
 
 pub struct Session {
     runtime: tokio::runtime::Runtime,
@@ -63,18 +63,7 @@ impl Session {
             .take(200)
             .collect();
 
-        self.view.files = self
-            .files
-            .iter()
-            .map(|path| {
-                let depth = path.components().count().saturating_sub(1);
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                FileEntry::file(name, depth)
-            })
-            .collect();
+        self.view.files = crc_ui::view::explorer::tree(&self.files, 120);
     }
 
     fn pick_file(&self) -> Option<PathBuf> {
@@ -86,7 +75,12 @@ impl Session {
     }
 
     pub fn open_row(&mut self, row: usize) -> bool {
-        let Some(path) = self.files.get(row).cloned() else {
+        let Some(path) = self
+            .view
+            .files
+            .get(row)
+            .and_then(|entry| entry.path.clone())
+        else {
             return false;
         };
         self.open_file(&path).is_ok()
@@ -196,19 +190,16 @@ impl Session {
             })
             .collect();
 
-        let open_names: Vec<String> = self.view.tabs.iter().map(|tab| tab.name.clone()).collect();
-        let selected = self
+        let active_path = self.documents.active().map(|d| d.path().to_path_buf());
+        let dirty: Vec<PathBuf> = self
             .documents
-            .active()
-            .and_then(|document| document.path().file_name())
-            .map(|name| name.to_string_lossy().into_owned());
+            .dirty_paths()
+            .into_iter()
+            .map(|path| path.to_path_buf())
+            .collect();
         for entry in &mut self.view.files {
-            entry.selected = selected.as_deref() == Some(entry.name.as_str());
-            entry.modified = open_names.contains(&entry.name)
-                && self
-                    .documents
-                    .iter()
-                    .any(|d| d.is_dirty() && d.path().ends_with(&entry.name));
+            entry.selected = entry.path.is_some() && entry.path == active_path;
+            entry.modified = entry.path.as_ref().is_some_and(|path| dirty.contains(path));
         }
 
         let Some(document) = self.documents.active() else {

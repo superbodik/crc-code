@@ -11,11 +11,13 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 [![Rust](https://img.shields.io/badge/Rust-1.96%2B-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![wgpu](https://img.shields.io/badge/wgpu-30-7c5cff)](https://wgpu.rs)
 [![tree-sitter](https://img.shields.io/badge/tree--sitter-12%20languages-4a7d5f)](https://tree-sitter.github.io)
-[![Tests](https://img.shields.io/badge/tests-273%20passing-3d6b50)](#testing)
+[![Tests](https://img.shields.io/badge/tests-283%20passing-3d6b50)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-2f6ba8)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-b0873f)]()
 
 </div>
+
+<img src="site/shots/dark.png" alt="The CRC Code window: explorer, tabs, highlighted Rust, terminal panel below">
 
 ---
 
@@ -142,7 +144,7 @@ colour, ink in the buffer, the caret on the cursor line.
 cargo test --workspace
 ```
 
-273 tests. The interesting ones do not mock: contrast ratios are computed from
+283 tests. The interesting ones do not mock: contrast ratios are computed from
 the actual palette, grammars are loaded and real snippets parsed, and frames are
 rendered on the real GPU and read back pixel by pixel.
 
