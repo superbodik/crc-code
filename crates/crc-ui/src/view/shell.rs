@@ -9,6 +9,7 @@ use crate::view::palette;
 use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 use crate::view::tabs;
+use crate::view::settings as settings_view;
 use crate::view::welcome;
 
 pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetrics) -> Frame {
@@ -18,6 +19,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
 
     if view.welcome.is_some() {
         welcome_screen(&mut frame, layout, theme, view);
+        settings_panel(&mut frame, layout, theme, view);
         command_palette(&mut frame, layout, theme, view);
         return frame;
     }
@@ -31,6 +33,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     panel(&mut frame, layout, theme);
     aside(&mut frame, layout, theme);
     statusbar(&mut frame, layout, theme, view);
+    settings_panel(&mut frame, layout, theme, view);
     command_palette(&mut frame, layout, theme, view);
 
     frame
@@ -897,5 +900,381 @@ fn welcome_screen(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &Edito
             )
             .line_height(rect.height),
         );
+    }
+}
+
+fn settings_panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.settings.as_ref() else {
+        return;
+    };
+
+    let scale = theme.scale;
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+
+    frame.overlay_quad(Quad::filled(
+        layout.window,
+        theme.chrome.backdrop.with_alpha(160),
+    ));
+
+    let placed = settings_view::layout(layout.window, state, scale);
+    frame.overlay_quad(
+        Quad::filled(placed.panel, theme.chrome.raised)
+            .rounded(metrics.corner_radius)
+            .bordered(metrics.border_width, theme.chrome.border),
+    );
+
+    frame.overlay_text(
+        TextRun::new(
+            "Настройки",
+            placed.header.inset_by(settings_view::PADDING * scale, 0.0),
+            type_scale.title,
+            theme.chrome.text_strong,
+        )
+        .weight(Weight::Semibold)
+        .line_height(placed.header.height),
+    );
+    frame.overlay_quad(Quad::filled(
+        Rect::new(
+            placed.header.x,
+            placed.header.bottom() - 1.0,
+            placed.header.width,
+            1.0,
+        ),
+        theme.chrome.border,
+    ));
+    frame.overlay_text(
+        TextRun::new(
+            "\u{00d7}",
+            placed.close,
+            type_scale.large,
+            if state.hovered == Some(settings_view::Target::Close) {
+                theme.chrome.text_strong
+            } else {
+                theme.chrome.text_faint
+            },
+        )
+        .align(TextAlign::Center)
+        .line_height(placed.close.height),
+    );
+
+    frame.overlay_quad(Quad::filled(placed.sidebar, theme.chrome.panel));
+    frame.overlay_quad(Quad::filled(
+        Rect::new(
+            placed.sidebar.right() - 1.0,
+            placed.sidebar.y,
+            1.0,
+            placed.sidebar.height,
+        ),
+        theme.chrome.border,
+    ));
+
+    for (index, rect) in placed.sections.iter().enumerate() {
+        let section = settings_view::Section::ALL[index];
+        let current = section == state.section;
+
+        if current {
+            frame.overlay_quad(
+                Quad::filled(*rect, theme.chrome.selected).rounded(metrics.corner_radius_small),
+            );
+        } else if state.hovered == Some(settings_view::Target::Section(index)) {
+            frame.overlay_quad(
+                Quad::filled(*rect, theme.chrome.hover).rounded(metrics.corner_radius_small),
+            );
+        }
+
+        frame.overlay_text(
+            TextRun::new(
+                section.title(),
+                rect.inset_by(12.0 * scale, 0.0),
+                type_scale.body,
+                if current {
+                    theme.chrome.text_strong
+                } else {
+                    theme.chrome.text
+                },
+            )
+            .line_height(rect.height),
+        );
+    }
+
+    if let Some(thumb) = placed.thumb {
+        frame.overlay_quad(Quad::filled(thumb, theme.chrome.border).rounded(thumb.width / 2.0));
+    }
+
+    if let Some(field) = placed.search {
+        frame.overlay_quad(
+            Quad::filled(field, theme.chrome.surface)
+                .rounded(metrics.corner_radius_small)
+                .bordered(
+                    metrics.border_width,
+                    if state.hovered == Some(settings_view::Target::Search) {
+                        theme.chrome.accent
+                    } else {
+                        theme.chrome.border
+                    },
+                ),
+        );
+
+        let empty = state.query.is_empty();
+        frame.overlay_text(
+            TextRun::new(
+                if empty {
+                    "Поиск по командам".to_string()
+                } else {
+                    state.query.clone()
+                },
+                field.inset_by(12.0 * scale, 0.0),
+                type_scale.body,
+                if empty {
+                    theme.chrome.text_faint
+                } else {
+                    theme.chrome.text_strong
+                },
+            )
+            .line_height(field.height),
+        );
+    }
+
+    if let Some(button) = placed.reset {
+        let live = state.touched();
+        let hovered = live && state.hovered == Some(settings_view::Target::Reset);
+
+        frame.overlay_quad(
+            Quad::filled(
+                button,
+                if hovered {
+                    theme.chrome.hover
+                } else {
+                    theme.chrome.panel
+                },
+            )
+            .rounded(metrics.corner_radius_small)
+            .bordered(metrics.border_width, theme.chrome.border),
+        );
+        frame.overlay_text(
+            TextRun::new(
+                "Сбросить",
+                button,
+                type_scale.small,
+                if live {
+                    theme.chrome.text
+                } else {
+                    theme.chrome.text_faint
+                },
+            )
+            .align(TextAlign::Center)
+            .line_height(button.height),
+        );
+    }
+
+    let shown = state.shown();
+    if shown.is_empty() {
+        frame.overlay_text(
+            TextRun::new(
+                "Ничего не нашлось",
+                placed.body,
+                type_scale.body,
+                theme.chrome.text_faint,
+            )
+            .align(TextAlign::Center)
+            .line_height(placed.body.height),
+        );
+        return;
+    }
+
+    match state.section {
+        settings_view::Section::Appearance => {
+            for (offset, rect) in placed.rows.iter().enumerate() {
+                let Some(toggle) = shown
+                    .get(offset + state.scroll)
+                    .and_then(|index| state.toggles.get(*index))
+                else {
+                    break;
+                };
+                let index = shown[offset + state.scroll];
+
+                if state.hovered == Some(settings_view::Target::Toggle(index)) {
+                    frame.overlay_quad(
+                        Quad::filled(*rect, theme.chrome.hover)
+                            .rounded(metrics.corner_radius_small),
+                    );
+                }
+
+                frame.overlay_text(
+                    TextRun::new(
+                        toggle.label.clone(),
+                        Rect::new(
+                            rect.x + 8.0 * scale,
+                            rect.y + 6.0 * scale,
+                            rect.width * 0.7,
+                            rect.height * 0.5,
+                        ),
+                        type_scale.body,
+                        theme.chrome.text_strong,
+                    )
+                    .line_height(rect.height * 0.5),
+                );
+                frame.overlay_text(
+                    TextRun::new(
+                        toggle.note.clone(),
+                        Rect::new(
+                            rect.x + 8.0 * scale,
+                            rect.y + rect.height * 0.52,
+                            rect.width * 0.7,
+                            rect.height * 0.4,
+                        ),
+                        type_scale.small,
+                        theme.chrome.text_faint,
+                    )
+                    .line_height(rect.height * 0.4),
+                );
+
+                let track = Rect::new(
+                    rect.right() - 46.0 * scale,
+                    rect.y + (rect.height - 22.0 * scale) / 2.0,
+                    40.0 * scale,
+                    22.0 * scale,
+                );
+                frame.overlay_quad(
+                    Quad::filled(
+                        track,
+                        if toggle.on {
+                            theme.chrome.accent_solid
+                        } else {
+                            theme.chrome.selected
+                        },
+                    )
+                    .rounded(track.height / 2.0),
+                );
+
+                let knob = 16.0 * scale;
+                frame.overlay_quad(
+                    Quad::filled(
+                        Rect::new(
+                            if toggle.on {
+                                track.right() - knob - 3.0 * scale
+                            } else {
+                                track.x + 3.0 * scale
+                            },
+                            track.y + (track.height - knob) / 2.0,
+                            knob,
+                            knob,
+                        ),
+                        theme.chrome.raised,
+                    )
+                    .rounded(knob / 2.0),
+                );
+            }
+        }
+        settings_view::Section::Keys => {
+            for (offset, rect) in placed.rows.iter().enumerate() {
+                let Some(binding) = shown
+                    .get(offset + state.scroll)
+                    .and_then(|index| state.bindings.get(*index))
+                else {
+                    break;
+                };
+                let index = shown[offset + state.scroll];
+                let listening = state.capturing == Some(index);
+
+                if listening {
+                    frame.overlay_quad(
+                        Quad::filled(*rect, theme.chrome.accent_wash)
+                            .rounded(metrics.corner_radius_small),
+                    );
+                } else if state.hovered == Some(settings_view::Target::Binding(index)) {
+                    frame.overlay_quad(
+                        Quad::filled(*rect, theme.chrome.hover)
+                            .rounded(metrics.corner_radius_small),
+                    );
+                }
+
+                frame.overlay_text(
+                    TextRun::new(
+                        binding.title.clone(),
+                        Rect::new(
+                            rect.x + 8.0 * scale,
+                            rect.y + 6.0 * scale,
+                            rect.width - settings_view::KEYCAP * scale,
+                            rect.height * 0.5,
+                        ),
+                        type_scale.body,
+                        theme.chrome.text_strong,
+                    )
+                    .line_height(rect.height * 0.5),
+                );
+
+                let note = if listening {
+                    "нажми сочетание · Esc — отмена".to_string()
+                } else if let Some(other) = binding.clash.as_ref() {
+                    format!("занято: {other}")
+                } else if binding.changed {
+                    "изменено".to_string()
+                } else {
+                    String::new()
+                };
+                if !note.is_empty() {
+                    frame.overlay_text(
+                        TextRun::new(
+                            note,
+                            Rect::new(
+                                rect.x + 8.0 * scale,
+                                rect.y + rect.height * 0.52,
+                                rect.width - settings_view::KEYCAP * scale,
+                                rect.height * 0.4,
+                            ),
+                            type_scale.small,
+                            if binding.clash.is_some() {
+                                theme.chrome.danger
+                            } else {
+                                theme.chrome.text_faint
+                            },
+                        )
+                        .line_height(rect.height * 0.4),
+                    );
+                }
+
+                let cap = Rect::new(
+                    rect.right() - settings_view::KEYCAP * scale,
+                    rect.y + (rect.height - 28.0 * scale) / 2.0,
+                    (settings_view::KEYCAP - 10.0) * scale,
+                    28.0 * scale,
+                );
+                frame.overlay_quad(
+                    Quad::filled(cap, theme.chrome.surface)
+                        .rounded(metrics.corner_radius_small)
+                        .bordered(
+                            metrics.border_width,
+                            if listening {
+                                theme.chrome.accent
+                            } else if binding.clash.is_some() {
+                                theme.chrome.danger
+                            } else {
+                                theme.chrome.border
+                            },
+                        ),
+                );
+                frame.overlay_text(
+                    TextRun::new(
+                        if binding.keys.is_empty() {
+                            "не назначено".to_string()
+                        } else {
+                            binding.keys.clone()
+                        },
+                        cap,
+                        type_scale.small,
+                        if binding.keys.is_empty() {
+                            theme.chrome.text_faint
+                        } else {
+                            theme.chrome.text
+                        },
+                    )
+                    .mono()
+                    .align(TextAlign::Center)
+                    .line_height(cap.height),
+                );
+            }
+        }
     }
 }

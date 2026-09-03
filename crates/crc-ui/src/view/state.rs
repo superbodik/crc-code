@@ -5,6 +5,7 @@ use crc_theme::Highlight;
 
 use crate::view::controls::WindowControl;
 use crate::view::palette::PaletteView;
+use crate::view::settings::SettingsView;
 use crate::view::welcome::WelcomeView;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +103,7 @@ pub struct EditorView {
     pub hovered_tab: Option<usize>,
     pub palette: Option<PaletteView>,
     pub welcome: Option<WelcomeView>,
+    pub settings: Option<SettingsView>,
     pub selection: Option<Range<usize>>,
     pub dirty: bool,
 }

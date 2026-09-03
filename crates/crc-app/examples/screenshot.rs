@@ -6,6 +6,7 @@ use crc_app::Session;
 use crc_theme::{Appearance, Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::palette::{self, Action, PaletteView};
+use crc_ui::view::settings::{BindingRow, Section, SettingsView, Toggle};
 use crc_ui::view::welcome::{RecentEntry, WelcomeView};
 use crc_ui::view::{self, CodeMetrics};
 use crc_ui::{Offscreen, Shell, ShellState, TextRun};
@@ -161,7 +162,105 @@ fn main() -> anyhow::Result<()> {
         println!("{}", path.display());
     }
 
+    session.view.welcome = None;
+    session.view.palette = None;
+
+    for (name, section, capturing) in [
+        ("settings", Section::Appearance, None),
+        ("keys", Section::Keys, Some(3usize)),
+    ] {
+        let mut bindings = binding_rows();
+        crc_ui::view::settings::mark_clashes(&mut bindings);
+
+        session.view.settings = Some(SettingsView {
+            section,
+            query: String::new(),
+            toggles: toggles(),
+            bindings,
+            capturing,
+            hovered: None,
+            scroll: 0,
+        });
+
+        let theme = Theme::new(Appearance::Dark).with_density(Density::Balanced);
+        let probe = TextRun::new(
+            "0000000000",
+            Rect::new(0.0, 0.0, 1000.0, 100.0),
+            theme.type_scale.code,
+            Rgba::hex(0x000000),
+        )
+        .mono();
+        let (width, _) = canvas.measure(&probe);
+        let metrics = CodeMetrics {
+            char_width: width / 10.0,
+            line_height: theme.type_scale.code * crc_theme::typography::LINE_HEIGHT_CODE,
+        };
+
+        let layout = Shell::compute(
+            Rect::from_size(WIDTH as f32, HEIGHT as f32),
+            &theme,
+            &ShellState::default(),
+        );
+        let frame = view::draw(&layout, &theme, &session.view, metrics);
+        let pixels = canvas.render_frame(&frame);
+
+        let path = out.join(format!("{name}.png"));
+        write_png(&path, WIDTH, HEIGHT, &pixels)?;
+        println!("{}", path.display());
+    }
+
     Ok(())
+}
+
+fn toggles() -> Vec<Toggle> {
+    vec![
+        Toggle::new("dark", "Тёмная тема", "Светлый и тёмный набор цветов", true),
+        Toggle::new(
+            "rail",
+            "Рейка действий",
+            "Узкая полоса у левого края",
+            true,
+        ),
+        Toggle::new("explorer", "Проводник", "Дерево файлов проекта", true),
+        Toggle::new("tabs", "Вкладки", "Строка с открытыми файлами", true),
+        Toggle::new(
+            "breadcrumbs",
+            "Путь над файлом",
+            "Проект и имя файла",
+            false,
+        ),
+        Toggle::new(
+            "minimap",
+            "Мини-карта",
+            "Полоса обзора справа от кода",
+            true,
+        ),
+        Toggle::new("panel", "Нижняя панель", "Терминал, проблемы, вывод", true),
+    ]
+}
+
+fn binding_rows() -> Vec<BindingRow> {
+    let row = |command: &str, title: &str, keys: &str, changed: bool| BindingRow {
+        command: command.to_string(),
+        title: title.to_string(),
+        keys: keys.to_string(),
+        clash: None,
+        changed,
+    };
+
+    vec![
+        row("save", "Сохранить файл", "Ctrl+S", false),
+        row("close-tab", "Закрыть вкладку", "Ctrl+W", false),
+        row("palette", "Командная палитра", "Ctrl+K", false),
+        row("open-folder", "Открыть папку проекта", "Ctrl+O", false),
+        row("settings", "Настройки", "Ctrl+,", false),
+        row("theme", "Переключить светлую и тёмную тему", "Ctrl+D", true),
+        row("sidebar", "Показать или скрыть проводник", "Ctrl+D", true),
+        row("zen", "Zen — оставить только код", "Alt+Z", false),
+        row("select-all", "Выделить всё", "Ctrl+A", false),
+        row("undo", "Отменить правку", "Ctrl+Z", false),
+        row("redo", "Вернуть правку", "", false),
+    ]
 }
 
 fn actions() -> Vec<Action> {

@@ -7,7 +7,7 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    palette, tabs, welcome,
+    palette, settings as settings_view, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -164,6 +164,7 @@ impl App {
             Command::OpenPalette => self.toggle_palette(),
             Command::OpenFolder => self.pick_folder(),
             Command::ShowWelcome => self.show_welcome(),
+            Command::OpenSettings => self.toggle_settings(),
             Command::CloseTab => {
                 if let Some(index) = self.session.active_tab() {
                     self.session.close_tab(index);
@@ -275,7 +276,9 @@ impl App {
         }
 
         let layout = self.layout();
-        if self.session.view.welcome.is_some() && !layout.titlebar.contains(x, y) {
+        if self.session.view.settings.is_some() && !layout.titlebar.contains(x, y) {
+            self.settings_hover(x, y);
+        } else if self.session.view.welcome.is_some() && !layout.titlebar.contains(x, y) {
             self.welcome_hover(x, y);
         }
 
@@ -330,6 +333,13 @@ impl App {
     fn press(&mut self, event_loop: &ActiveEventLoop) {
         let (x, y) = self.cursor;
         let layout = self.layout();
+
+        if self.session.view.settings.is_some()
+            && !layout.titlebar.contains(x, y)
+            && self.settings_press(x, y)
+        {
+            return;
+        }
 
         if self.session.view.welcome.is_some()
             && !layout.titlebar.contains(x, y)
@@ -546,7 +556,11 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
-                self.scroll(delta);
+                if self.session.view.settings.is_some() {
+                    self.settings_scroll(delta);
+                } else {
+                    self.scroll(delta);
+                }
                 self.request_redraw();
             }
             WindowEvent::MouseInput {
@@ -578,7 +592,9 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                if self.session.view.palette.is_some() {
+                if self.session.view.settings.is_some() {
+                    self.settings_key(&logical_key);
+                } else if self.session.view.palette.is_some() {
                     self.palette_key(&logical_key, event_loop);
                 } else if let Some(command) = self.command_for(&logical_key) {
                     self.apply(command, event_loop);
@@ -832,10 +848,328 @@ impl App {
     }
 }
 
+
+impl App {
+    fn toggle_settings(&mut self) {
+        if self.session.view.settings.is_some() {
+            self.session.view.settings = None;
+            return;
+        }
+        self.session.view.settings = Some(settings_view::SettingsView {
+            section: settings_view::Section::Appearance,
+            query: String::new(),
+            toggles: self.toggles(),
+            bindings: self.binding_rows(),
+            capturing: None,
+            hovered: None,
+            scroll: 0,
+        });
+    }
+
+    fn toggles(&self) -> Vec<settings_view::Toggle> {
+        use settings_view::Toggle;
+        vec![
+            Toggle::new(
+                "dark",
+                "Тёмная тема",
+                "Светлый и тёмный набор цветов",
+                matches!(self.theme.appearance, crc_theme::Appearance::Dark),
+            ),
+            Toggle::new(
+                "rail",
+                "Рейка действий",
+                "Узкая полоса у левого края",
+                self.state.rail,
+            ),
+            Toggle::new(
+                "explorer",
+                "Проводник",
+                "Дерево файлов проекта",
+                self.state.sidebar_open,
+            ),
+            Toggle::new(
+                "tabs",
+                "Вкладки",
+                "Строка с открытыми файлами",
+                self.state.tabs,
+            ),
+            Toggle::new(
+                "breadcrumbs",
+                "Путь над файлом",
+                "Проект и имя файла",
+                self.state.breadcrumbs,
+            ),
+            Toggle::new(
+                "minimap",
+                "Мини-карта",
+                "Полоса обзора справа от кода",
+                self.state.minimap,
+            ),
+            Toggle::new(
+                "panel",
+                "Нижняя панель",
+                "Терминал, проблемы, вывод",
+                self.state.panel,
+            ),
+            Toggle::new(
+                "status",
+                "Статус-бар",
+                "Строка внизу окна",
+                self.state.status_bar,
+            ),
+        ]
+    }
+
+    fn binding_rows(&self) -> Vec<settings_view::BindingRow> {
+        let mut rows: Vec<settings_view::BindingRow> = self
+            .actions
+            .iter()
+            .map(|action| settings_view::BindingRow {
+                command: action.id.to_string(),
+                title: action.title.clone(),
+                keys: self.keymap.hint(action.id).unwrap_or_default(),
+                clash: None,
+                changed: self
+                    .settings
+                    .keys
+                    .iter()
+                    .any(|binding| binding.command == action.id),
+            })
+            .collect();
+        settings_view::mark_clashes(&mut rows);
+        rows
+    }
+
+    fn flip_toggle(&mut self, index: usize) {
+        let Some(id) = self
+            .session
+            .view
+            .settings
+            .as_ref()
+            .and_then(|state| state.toggles.get(index))
+            .map(|toggle| toggle.id.clone())
+        else {
+            return;
+        };
+
+        match id.as_str() {
+            "dark" => self.theme = self.theme.with_appearance(self.theme.appearance.flipped()),
+            "rail" => self.state.rail = !self.state.rail,
+            "explorer" => self.state.sidebar_open = !self.state.sidebar_open,
+            "tabs" => self.state.tabs = !self.state.tabs,
+            "breadcrumbs" => self.state.breadcrumbs = !self.state.breadcrumbs,
+            "minimap" => self.state.minimap = !self.state.minimap,
+            "panel" => self.state.panel = !self.state.panel,
+            "status" => self.state.status_bar = !self.state.status_bar,
+            _ => return,
+        }
+
+        let refreshed = self.toggles();
+        if let Some(state) = self.session.view.settings.as_mut() {
+            state.toggles = refreshed;
+        }
+        self.store();
+    }
+
+    fn settings_key(&mut self, key: &Key) {
+        let capturing = self
+            .session
+            .view
+            .settings
+            .as_ref()
+            .and_then(|state| state.capturing);
+
+        let Some(index) = capturing else {
+            self.browse_keys(key);
+            return;
+        };
+
+        if matches!(key, Key::Named(NamedKey::Escape)) {
+            if let Some(state) = self.session.view.settings.as_mut() {
+                state.capturing = None;
+            }
+            return;
+        }
+
+        let Some(chord) = crate::input::chord(key, self.modifiers) else {
+            return;
+        };
+
+        if let Some(state) = self.session.view.settings.as_mut() {
+            if let Some(row) = state.bindings.get_mut(index) {
+                row.keys = chord.label();
+                row.changed = true;
+            }
+            state.capturing = None;
+            settings_view::mark_clashes(&mut state.bindings);
+        }
+        self.rebind();
+    }
+
+    fn rebind(&mut self) {
+        let Some(state) = self.session.view.settings.as_ref() else {
+            return;
+        };
+        let taken: Vec<crc_config::Chord> = state
+            .bindings
+            .iter()
+            .filter_map(|row| crc_config::Chord::parse(&row.keys))
+            .collect();
+
+        let mut keys: Vec<crc_config::Binding> = crc_config::keymap::defaults()
+            .into_iter()
+            .filter(|binding| {
+                crc_config::Chord::parse(&binding.keys)
+                    .is_some_and(|chord| !taken.contains(&chord))
+            })
+            .map(|binding| crc_config::Binding::new(binding.keys, ""))
+            .collect();
+
+        keys.extend(
+            state
+                .bindings
+                .iter()
+                .filter(|row| !row.keys.is_empty())
+                .map(|row| crc_config::Binding::new(row.keys.clone(), row.command.clone())),
+        );
+        self.settings.keys = keys;
+
+        let (keymap, rejected) = self.settings.keymap();
+        for spec in &rejected {
+            tracing::warn!("key binding {spec} makes no sense and was skipped");
+        }
+        self.keymap = keymap;
+        self.actions = actions(&self.keymap);
+        self.store();
+    }
+
+    fn settings_press(&mut self, x: f32, y: f32) -> bool {
+        let Some(state) = self.session.view.settings.as_ref() else {
+            return false;
+        };
+        let placed = settings_view::layout(self.layout().window, state, self.theme.scale);
+
+        match settings_view::target_at(&placed, state, x, y) {
+            Some(settings_view::Target::Close) | None => self.session.view.settings = None,
+            Some(settings_view::Target::Section(index)) => {
+                if let Some(section) = settings_view::Section::ALL.get(index).copied()
+                    && let Some(state) = self.session.view.settings.as_mut()
+                {
+                    state.section = section;
+                    state.scroll = 0;
+                    state.capturing = None;
+                    state.query.clear();
+                }
+            }
+            Some(settings_view::Target::Toggle(index)) => self.flip_toggle(index),
+            Some(settings_view::Target::Binding(index)) => {
+                if let Some(state) = self.session.view.settings.as_mut() {
+                    state.capturing = Some(index);
+                }
+            }
+            Some(settings_view::Target::Reset) => self.reset_keys(),
+            Some(settings_view::Target::Search) => {
+                if let Some(state) = self.session.view.settings.as_mut() {
+                    state.capturing = None;
+                }
+            }
+        }
+        true
+    }
+
+    fn settings_hover(&mut self, x: f32, y: f32) {
+        let Some(state) = self.session.view.settings.as_ref() else {
+            return;
+        };
+        let placed = settings_view::layout(self.layout().window, state, self.theme.scale);
+        let target = settings_view::target_at(&placed, state, x, y);
+
+        if let Some(state) = self.session.view.settings.as_mut()
+            && state.hovered != target
+        {
+            state.hovered = target;
+            self.request_redraw();
+        }
+    }
+
+    fn settings_scroll(&mut self, delta: MouseScrollDelta) {
+        let lines = match delta {
+            MouseScrollDelta::LineDelta(_, y) => -y * WHEEL_LINES,
+            MouseScrollDelta::PixelDelta(position) => -(position.y as f32) / 40.0,
+        };
+        let lines = lines.round() as isize;
+
+        let Some(state) = self.session.view.settings.as_ref() else {
+            return;
+        };
+        let placed = settings_view::layout(self.layout().window, state, self.theme.scale);
+        let last = state
+            .rows()
+            .saturating_sub(settings_view::visible_rows(&placed));
+
+        if let Some(state) = self.session.view.settings.as_mut() {
+            let next = state.scroll as isize + lines;
+            state.scroll = next.clamp(0, last as isize) as usize;
+        }
+    }
+}
+
+
+impl App {
+    fn browse_keys(&mut self, key: &Key) {
+        if matches!(key, Key::Named(NamedKey::Escape)) {
+            self.session.view.settings = None;
+            return;
+        }
+
+        if let Some(chord) = crate::input::chord(key, self.modifiers)
+            && self.keymap.command(&chord) == Some("settings")
+        {
+            self.session.view.settings = None;
+            return;
+        }
+
+        let Some(state) = self.session.view.settings.as_mut() else {
+            return;
+        };
+        if state.section != settings_view::Section::Keys {
+            return;
+        }
+
+        let control = self.modifiers.control_key() || self.modifiers.alt_key();
+        match key {
+            Key::Named(NamedKey::Backspace) => {
+                state.query.pop();
+            }
+            Key::Named(NamedKey::Space) if !control => state.query.push(' '),
+            Key::Character(text) if !control => state.query.push_str(text),
+            _ => return,
+        }
+        state.scroll = 0;
+    }
+
+    fn reset_keys(&mut self) {
+        self.settings.keys.clear();
+
+        let (keymap, _) = self.settings.keymap();
+        self.keymap = keymap;
+        self.actions = actions(&self.keymap);
+
+        let rows = self.binding_rows();
+        if let Some(state) = self.session.view.settings.as_mut() {
+            state.bindings = rows;
+            state.capturing = None;
+            state.scroll = 0;
+        }
+        self.store();
+    }
+}
+
 fn actions(keymap: &Keymap) -> Vec<Action> {
     let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
         Action::new("open-folder", "Открыть папку проекта", "Файл").hint(hint("open-folder")),
+        Action::new("settings", "Настройки", "Вид").hint(hint("settings")),
         Action::new("welcome", "Показать стартовый экран", "Файл").hint(hint("welcome")),
         Action::new("save", "Сохранить файл", "Файл").hint(hint("save")),
         Action::new("close-tab", "Закрыть вкладку", "Файл").hint(hint("close-tab")),
