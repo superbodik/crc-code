@@ -82,6 +82,15 @@ fn titlebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView)
                 .rounded(rect.width / 2.0)
                 .bordered(1.0, fill.shade(CONTROL_RING)),
         );
+
+        if view.focused && view.hovered_control.is_some() {
+            frame.text(
+                TextRun::new(control.glyph(), rect, rect.height * 0.95, fill.shade(0.78))
+                    .weight(Weight::Semibold)
+                    .align(TextAlign::Center)
+                    .line_height(rect.height),
+            );
+        }
     }
 
     let side = (bar.height * 0.45).round();

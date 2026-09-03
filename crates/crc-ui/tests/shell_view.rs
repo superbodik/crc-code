@@ -324,6 +324,15 @@ mod window_controls {
         )
     }
 
+    fn shoulder(canvas: &Offscreen, pixels: &[u8], layout: &Shell, control: WindowControl) -> Rgba {
+        let rect = control_rect(layout.titlebar, control);
+        canvas.pixel(
+            pixels,
+            (rect.x + rect.width / 2.0) as u32,
+            (rect.y + 2.0) as u32,
+        )
+    }
+
     #[test]
     fn a_focused_window_shows_the_three_colours() {
         let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
@@ -394,17 +403,23 @@ mod window_controls {
             CodeMetrics::default(),
         ));
 
-        let before = dot(&canvas, &plain, &layout, WindowControl::Close);
-        let after = dot(&canvas, &lit, &layout, WindowControl::Close);
+        let before = shoulder(&canvas, &plain, &layout, WindowControl::Close);
+        let after = shoulder(&canvas, &lit, &layout, WindowControl::Close);
         assert!(
             after.relative_luminance() < before.relative_luminance(),
             "hover did not darken the close button"
         );
 
         assert_eq!(
+            shoulder(&canvas, &plain, &layout, WindowControl::Maximize),
+            shoulder(&canvas, &lit, &layout, WindowControl::Maximize),
+            "only the dot under the pointer changes colour"
+        );
+
+        assert_ne!(
             dot(&canvas, &plain, &layout, WindowControl::Maximize),
             dot(&canvas, &lit, &layout, WindowControl::Maximize),
-            "the other buttons should not react"
+            "but every dot shows its sign, the way a mac does"
         );
     }
 

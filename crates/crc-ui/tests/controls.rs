@@ -166,3 +166,109 @@ mod edges {
         );
     }
 }
+
+mod glyphs {
+    use super::*;
+    use crc_theme::{Rgba, Theme};
+    use crc_ui::view::{self, CodeMetrics, EditorView};
+    use crc_ui::{Offscreen, Shell, ShellState};
+
+    const WIDTH: u32 = 900;
+    const HEIGHT: u32 = 600;
+
+    fn editor(hovered: Option<WindowControl>) -> EditorView {
+        EditorView {
+            project: "crc-code".to_string(),
+            focused: true,
+            hovered_control: hovered,
+            ..EditorView::default()
+        }
+    }
+
+    fn shell(theme: &Theme) -> Shell {
+        Shell::compute(
+            Rect::from_size(WIDTH as f32, HEIGHT as f32),
+            theme,
+            &ShellState::default(),
+        )
+    }
+
+    #[test]
+    fn every_control_names_itself() {
+        assert_eq!(WindowControl::Close.glyph(), "\u{00d7}");
+        assert_eq!(WindowControl::Minimize.glyph(), "\u{2013}");
+        assert_eq!(WindowControl::Maximize.glyph(), "+");
+    }
+
+    #[test]
+    fn hovering_one_control_marks_all_three_the_way_a_mac_does() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::dark();
+        let layout = shell(&theme);
+
+        let resting = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &editor(None),
+            CodeMetrics::default(),
+        ));
+        let hovered = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &editor(Some(WindowControl::Close)),
+            CodeMetrics::default(),
+        ));
+
+        for control in WindowControl::ALL {
+            let rect = control_rect(layout.titlebar, control).inset(2.0);
+            let fill = match control {
+                WindowControl::Close => theme.chrome.control_close,
+                WindowControl::Minimize => theme.chrome.control_minimize,
+                WindowControl::Maximize => theme.chrome.control_maximize,
+            };
+            let floor = fill.relative_luminance() * 0.25;
+            let ink = |c: Rgba| c.relative_luminance() < floor;
+
+            assert_eq!(
+                canvas.count_pixels(&resting, rect, ink),
+                0,
+                "{control:?} should be a plain circle at rest"
+            );
+            let marks = canvas.count_pixels(&hovered, rect, ink);
+            let softer = canvas.count_pixels(&hovered, rect, |c: Rgba| {
+                c.relative_luminance() < fill.relative_luminance() * 0.7
+            });
+            assert!(
+                marks > 3,
+                "{control:?}: {marks} ink pixels, {softer} merely darker"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unfocused_window_keeps_its_signs_to_itself() {
+        let mut canvas = Offscreen::new(WIDTH, HEIGHT).expect("a GPU");
+        let theme = Theme::dark();
+        let layout = shell(&theme);
+
+        let pixels = canvas.render_frame(&view::draw(
+            &layout,
+            &theme,
+            &EditorView {
+                focused: false,
+                hovered_control: Some(WindowControl::Close),
+                ..editor(None)
+            },
+            CodeMetrics::default(),
+        ));
+
+        let rect = control_rect(layout.titlebar, WindowControl::Close).inset(2.0);
+        let floor = theme.chrome.control_idle.relative_luminance() * 0.25;
+
+        assert_eq!(
+            canvas.count_pixels(&pixels, rect, |c: Rgba| c.relative_luminance() < floor),
+            0,
+            "a background window shows grey dots and nothing else"
+        );
+    }
+}

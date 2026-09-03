@@ -14,6 +14,14 @@ impl WindowControl {
         WindowControl::Maximize,
     ];
 
+    pub const fn glyph(self) -> &'static str {
+        match self {
+            WindowControl::Close => "\u{00d7}",
+            WindowControl::Minimize => "\u{2013}",
+            WindowControl::Maximize => "+",
+        }
+    }
+
     const fn order(self) -> usize {
         match self {
             WindowControl::Close => 0,
@@ -35,8 +43,8 @@ pub enum Edge {
     BottomRight,
 }
 
-pub const CONTROL_DIAMETER: f32 = 11.0;
-pub const CONTROL_SPACING: f32 = 18.0;
+pub const CONTROL_DIAMETER: f32 = 12.0;
+pub const CONTROL_SPACING: f32 = 20.0;
 pub const CONTROL_INSET: f32 = 14.0;
 const CONTROL_HIT_PADDING: f32 = 3.0;
 pub const RESIZE_MARGIN: f32 = 6.0;
