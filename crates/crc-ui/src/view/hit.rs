@@ -35,17 +35,3 @@ pub fn explorer_row(sidebar: Rect, metrics: &Metrics, y: f32) -> Option<usize> {
     }
     Some(((y - top) / metrics.row_height).floor() as usize)
 }
-
-pub fn tab_at(tabs: Rect, widths: &[f32], x: f32, y: f32) -> Option<usize> {
-    if !tabs.contains(x, y) {
-        return None;
-    }
-    let mut left = tabs.x;
-    for (index, width) in widths.iter().enumerate() {
-        if x < left + width {
-            return Some(index);
-        }
-        left += width;
-    }
-    None
-}

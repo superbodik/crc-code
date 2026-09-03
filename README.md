@@ -11,7 +11,7 @@ Rust core, tree-sitter highlighting, `wgpu` renderer, no web view.
 [![Rust](https://img.shields.io/badge/Rust-1.96%2B-b7410e?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![wgpu](https://img.shields.io/badge/wgpu-30-7c5cff)](https://wgpu.rs)
 [![tree-sitter](https://img.shields.io/badge/tree--sitter-12%20languages-4a7d5f)](https://tree-sitter.github.io)
-[![Tests](https://img.shields.io/badge/tests-245%20passing-3d6b50)](#testing)
+[![Tests](https://img.shields.io/badge/tests-273%20passing-3d6b50)](#testing)
 [![License](https://img.shields.io/badge/license-MIT-2f6ba8)](LICENSE)
 [![Status](https://img.shields.io/badge/status-early%20development-b0873f)]()
 
@@ -67,6 +67,7 @@ Needs a Rust toolchain (1.96+) and a GPU with Vulkan, Metal, DX12 or GL.
 | `Ctrl+S` | Save now — otherwise it saves itself |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | Undo and redo |
 | `Ctrl+A` | Select all |
+| `Ctrl+W` | Close the tab |
 | Arrows, `Home`, `End`, `PgUp`, `PgDn` | Move the cursor |
 | `Ctrl+Left` / `Ctrl+Right` | By word |
 | `Ctrl+Home` / `Ctrl+End` | To the start or end of the file |
@@ -78,7 +79,9 @@ Needs a Rust toolchain (1.96+) and a GPU with Vulkan, Metal, DX12 or GL.
 | `Esc` / `Ctrl+Q` | Quit |
 
 Click in the buffer to place the caret, drag to select, and the wheel scrolls.
-Click a file in the explorer to open it.
+Click a file in the explorer to open it in a new tab; click a tab to switch,
+or its cross to close. An unsaved tab shows a dot where the cross goes, and
+swaps back when you point at it.
 
 The three dots on the left close, minimize and maximize. The title bar drags
 the window; double-clicking it maximizes. The edges resize.
@@ -118,6 +121,7 @@ colour, ink in the buffer, the caret on the cursor line.
 - Workspace opening, gitignore-aware search, file watching
 - Editing: typing, selection, word and line motions, undo and redo
 - Mouse: click to place the caret, drag to select, wheel to scroll, click to open a file
+- Several files open at once, each keeping its own cursor and history
 - Auto-save 800 ms after the last keystroke, on focus loss and on close
 - Incremental highlighting across 12 languages, re-parsed per keystroke
 - GPU shell: title bar, rail, explorer, tabs, gutter, buffer, minimap, panel, status bar
@@ -126,7 +130,7 @@ colour, ink in the buffer, the caret on the cursor line.
 
 **Not yet**
 
-- Multiple tabs, split panes, the command palette
+- Split panes, the command palette
 - Find and replace
 - LSP: diagnostics, go to definition, completion
 - The Claude Code agent panel
@@ -138,7 +142,7 @@ colour, ink in the buffer, the caret on the cursor line.
 cargo test --workspace
 ```
 
-245 tests. The interesting ones do not mock: contrast ratios are computed from
+273 tests. The interesting ones do not mock: contrast ratios are computed from
 the actual palette, grammars are loaded and real snippets parsed, and frames are
 rendered on the real GPU and read back pixel by pixel.
 

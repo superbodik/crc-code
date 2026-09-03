@@ -3,6 +3,7 @@ use winit::keyboard::{Key, ModifiersState, NamedKey};
 
 pub enum Command {
     Quit,
+    CloseTab,
     ToggleZen,
     ToggleSidebar,
     ToggleAppearance,
@@ -60,6 +61,7 @@ pub fn resolve(key: &Key, modifiers: ModifiersState, rows: usize) -> Option<Comm
             "b" | "и" => Some(Command::ToggleSidebar),
             "d" | "в" => Some(Command::ToggleAppearance),
             "q" | "й" => Some(Command::Quit),
+            "w" | "ц" => Some(Command::CloseTab),
             _ => None,
         },
 

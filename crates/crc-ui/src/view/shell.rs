@@ -7,6 +7,7 @@ use crate::view::controls::{WindowControl, control_rect};
 use crate::view::logo;
 use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
+use crate::view::tabs;
 
 pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetrics) -> Frame {
     let mut frame = Frame::new(theme.chrome.backdrop);
@@ -207,19 +208,14 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
 
 fn tabs(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
     let bar = layout.tabs;
-    let metrics = theme.metrics();
     let scale = theme.type_scale;
 
     frame.quad(Quad::filled(bar, theme.chrome.panel));
     hairline_bottom(frame, bar, theme.chrome.border);
 
-    let mut x = bar.x;
-    for tab in &view.tabs {
-        let width = 24.0 + tab.name.chars().count() as f32 * scale.body * 0.62;
-        if x + width > bar.right() {
-            break;
-        }
-        let rect = Rect::new(x, bar.y, width, bar.height);
+    for (index, rect) in tabs::rects(bar, &view.tabs, &scale).into_iter().enumerate() {
+        let tab = &view.tabs[index];
+        let hovered = view.hovered_tab == Some(index);
 
         if tab.active {
             frame.quad(Quad::filled(rect, theme.chrome.surface));
@@ -227,12 +223,20 @@ fn tabs(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
                 Rect::new(rect.x, rect.y, rect.width, 2.0),
                 theme.chrome.accent,
             ));
+        } else if hovered {
+            frame.quad(Quad::filled(rect, theme.chrome.hover));
         }
 
+        let label = Rect::new(
+            rect.x + tabs::PADDING,
+            rect.y,
+            rect.width - tabs::PADDING * 2.0 - tabs::CLOSE_SIZE - tabs::CLOSE_GAP,
+            rect.height,
+        );
         frame.text(
             TextRun::new(
                 tab.name.clone(),
-                rect.inset_by(12.0, 0.0),
+                label,
                 scale.small,
                 if tab.active {
                     theme.chrome.text_strong
@@ -243,29 +247,41 @@ fn tabs(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
             .line_height(rect.height),
         );
 
-        if tab.modified || (tab.active && view.dirty) {
+        let close = tabs::close_rect(rect);
+        let unsaved = tab.modified || (tab.active && view.dirty);
+
+        if unsaved && !hovered {
             frame.quad(
-                Quad::filled(
-                    Rect::new(
-                        rect.right() - 12.0,
-                        rect.y + rect.height / 2.0 - 3.0,
-                        6.0,
-                        6.0,
-                    ),
-                    theme.chrome.warning,
+                Quad::filled(close.inset(4.0), theme.chrome.warning).rounded(tabs::CLOSE_SIZE),
+            );
+        } else if hovered || tab.active {
+            if hovered {
+                frame.quad(
+                    Quad::filled(close, theme.chrome.selected)
+                        .rounded(theme.metrics().corner_radius_small * 0.7),
+                );
+            }
+            frame.text(
+                TextRun::new(
+                    "×",
+                    close,
+                    scale.body,
+                    if hovered {
+                        theme.chrome.text_strong
+                    } else {
+                        theme.chrome.text_faint
+                    },
                 )
-                .rounded(3.0),
+                .align(TextAlign::Center)
+                .line_height(close.height),
             );
         }
 
-        x += width;
         frame.quad(Quad::filled(
-            Rect::new(x - 1.0, bar.y + 6.0, 1.0, bar.height - 12.0),
+            Rect::new(rect.right() - 1.0, bar.y + 6.0, 1.0, bar.height - 12.0),
             theme.chrome.border,
         ));
     }
-
-    let _ = metrics;
 }
 
 fn breadcrumbs(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {

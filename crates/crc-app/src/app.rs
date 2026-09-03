@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use crc_editor::{AUTOSAVE_IDLE_MS, Motion};
 use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
-use crc_ui::view::{self, CodeMetrics, Edge, WindowControl};
+use crc_ui::view::{self, CodeMetrics, Edge, TabHit, WindowControl, tabs};
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
@@ -120,7 +120,16 @@ impl App {
     fn apply(&mut self, command: Command, event_loop: &ActiveEventLoop) {
         let rows = self.rows();
         match command {
-            Command::Quit => event_loop.exit(),
+            Command::Quit => {
+                self.session.save_all();
+                event_loop.exit();
+            }
+            Command::CloseTab => {
+                if let Some(index) = self.session.active_tab() {
+                    self.session.close_tab(index);
+                    self.last_edit = None;
+                }
+            }
             Command::ToggleZen => self.theme.zen = !self.theme.zen,
             Command::ToggleSidebar => self.state.sidebar_open = !self.state.sidebar_open,
             Command::ToggleAppearance => {
@@ -224,10 +233,25 @@ impl App {
             return;
         }
 
-        let titlebar = self.layout().titlebar;
-        let control = view::control_at(titlebar, x, y);
+        let layout = self.layout();
+        let control = view::control_at(layout.titlebar, x, y);
         if control != self.session.view.hovered_control {
             self.session.view.hovered_control = control;
+            self.request_redraw();
+        }
+
+        let tab = match tabs::hit(
+            layout.tabs,
+            &self.session.view.tabs,
+            &self.theme.type_scale,
+            x,
+            y,
+        ) {
+            Some(TabHit::Select(index)) | Some(TabHit::Close(index)) => Some(index),
+            None => None,
+        };
+        if tab != self.session.view.hovered_tab {
+            self.session.view.hovered_tab = tab;
             self.request_redraw();
         }
 
@@ -306,6 +330,26 @@ impl App {
                 let _ = window.drag_window();
             }
             return;
+        }
+
+        match tabs::hit(
+            layout.tabs,
+            &self.session.view.tabs,
+            &self.theme.type_scale,
+            x,
+            y,
+        ) {
+            Some(TabHit::Close(index)) => {
+                self.session.close_tab(index);
+                self.last_edit = None;
+                return;
+            }
+            Some(TabHit::Select(index)) => {
+                self.session.activate_tab(index);
+                return;
+            }
+            None if layout.tabs.contains(x, y) => return,
+            None => {}
         }
 
         if let Some(sidebar) = layout.sidebar
@@ -402,7 +446,7 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                let _ = self.session.save();
+                self.session.save_all();
                 event_loop.exit();
             }
             WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
@@ -410,7 +454,8 @@ impl ApplicationHandler for App {
                 self.session.view.focused = focused;
                 if !focused {
                     self.session.view.hovered_control = None;
-                    let _ = self.session.save();
+                    self.session.view.hovered_tab = None;
+                    self.session.save_all();
                     self.last_edit = None;
                 }
                 self.request_redraw();

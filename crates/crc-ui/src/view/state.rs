@@ -88,6 +88,7 @@ pub struct EditorView {
     pub focused: bool,
     pub maximized: bool,
     pub hovered_control: Option<WindowControl>,
+    pub hovered_tab: Option<usize>,
     pub selection: Option<Range<usize>>,
     pub dirty: bool,
 }

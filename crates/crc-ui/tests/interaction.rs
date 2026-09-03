@@ -3,7 +3,7 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::hit::explorer_header_height;
 use crc_ui::view::{self, CodeMetrics, EditorView, FileEntry, Tab};
-use crc_ui::{Band, Offscreen, Shell, ShellState, bands, buffer_point, explorer_row, tab_at};
+use crc_ui::{Band, Offscreen, Shell, ShellState, bands, buffer_point, explorer_row};
 
 fn metrics() -> CodeMetrics {
     CodeMetrics {
@@ -146,22 +146,6 @@ mod pointing {
             explorer_row(sidebar, &metrics, sidebar.bottom() + 5.0),
             None
         );
-    }
-
-    #[test]
-    fn a_tab_is_found_by_walking_the_widths() {
-        let tabs = Rect::new(0.0, 40.0, 800.0, 34.0);
-        let widths = [100.0, 80.0, 120.0];
-
-        assert_eq!(tab_at(tabs, &widths, 10.0, 50.0), Some(0));
-        assert_eq!(tab_at(tabs, &widths, 150.0, 50.0), Some(1));
-        assert_eq!(tab_at(tabs, &widths, 250.0, 50.0), Some(2));
-        assert_eq!(
-            tab_at(tabs, &widths, 700.0, 50.0),
-            None,
-            "past the last tab"
-        );
-        assert_eq!(tab_at(tabs, &widths, 10.0, 200.0), None, "below the bar");
     }
 }
 

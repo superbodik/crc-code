@@ -2,13 +2,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crc_core::{Engine, Limits};
-use crc_editor::Document;
+use crc_editor::{Document, Documents};
 use crc_ui::view::{EditorView, FileEntry, Tab};
 
 pub struct Session {
     runtime: tokio::runtime::Runtime,
     engine: Arc<Engine>,
-    document: Option<Document>,
+    documents: Documents,
     files: Vec<PathBuf>,
     pub view: EditorView,
 }
@@ -29,7 +29,7 @@ impl Session {
         let mut session = Self {
             runtime,
             engine,
-            document: None,
+            documents: Documents::new(),
             files: Vec::new(),
             view: EditorView {
                 project,
@@ -51,7 +51,7 @@ impl Session {
     }
 
     pub fn document(&mut self) -> Option<&mut Document> {
-        self.document.as_mut()
+        self.documents.active_mut()
     }
 
     fn load_tree(&mut self) {
@@ -89,57 +89,140 @@ impl Session {
         let Some(path) = self.files.get(row).cloned() else {
             return false;
         };
-        if self.document.as_ref().is_some_and(|doc| doc.path() == path) {
-            return false;
-        }
-        self.save().ok();
         self.open_file(&path).is_ok()
     }
 
     pub fn open_file(&mut self, path: &Path) -> anyhow::Result<()> {
-        let document = self.runtime.block_on(self.engine.read_file(path))?;
-        let document = Document::open(path, document.text);
-
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-
-        self.view.tabs = vec![Tab::new(name.clone()).active()];
-        for entry in &mut self.view.files {
-            entry.selected = entry.name == name;
+        if let Some(index) = self.documents.index_of(path) {
+            self.documents.activate(index);
+            self.view.scroll_line = 0;
+            self.sync();
+            return Ok(());
         }
 
+        let opened = self.runtime.block_on(self.engine.read_file(path))?;
+        self.documents.open(Document::open(path, opened.text));
         self.view.scroll_line = 0;
-        self.document = Some(document);
         self.sync();
         Ok(())
     }
 
-    pub fn save(&mut self) -> anyhow::Result<bool> {
-        let Some(document) = self.document.as_mut() else {
-            return Ok(false);
+    pub fn active_tab(&self) -> Option<usize> {
+        self.documents.active_index()
+    }
+
+    pub fn activate_tab(&mut self, index: usize) -> bool {
+        if !self.documents.activate(index) {
+            return false;
+        }
+        self.view.scroll_line = 0;
+        self.sync();
+        true
+    }
+
+    pub fn close_tab(&mut self, index: usize) -> bool {
+        if self.documents.get(index).is_none() {
+            return false;
+        }
+        self.save_index(index);
+        self.documents.close(index);
+        self.view.scroll_line = 0;
+        self.sync();
+        true
+    }
+
+    fn save_index(&mut self, index: usize) -> bool {
+        let Some(document) = self.documents.get(index) else {
+            return false;
         };
         if !document.is_dirty() {
-            return Ok(false);
+            return false;
         }
 
         let path = document.path().to_path_buf();
         let text = document.text().to_string();
-        self.runtime
-            .block_on(self.engine.write_file(&path, text, None))?;
+        match self
+            .runtime
+            .block_on(self.engine.write_file(&path, text, None))
+        {
+            Ok(_) => {
+                if let Some(document) = self.documents.get_mut(index) {
+                    document.mark_saved();
+                }
+                true
+            }
+            Err(error) => {
+                tracing::error!("could not save {}: {error}", path.display());
+                false
+            }
+        }
+    }
 
-        document.mark_saved();
+    pub fn save(&mut self) -> anyhow::Result<bool> {
+        let Some(index) = self.documents.active_index() else {
+            return Ok(false);
+        };
+        let saved = self.save_index(index);
+        if saved {
+            self.sync();
+        }
+        Ok(saved)
+    }
+
+    pub fn save_all(&mut self) {
+        for index in 0..self.documents.len() {
+            self.save_index(index);
+        }
         self.sync();
-        Ok(true)
     }
 
     pub fn sync(&mut self) {
-        let Some(document) = self.document.as_ref() else {
+        let active = self.documents.active_index();
+
+        self.view.tabs = self
+            .documents
+            .iter()
+            .enumerate()
+            .map(|(index, document)| {
+                let name = document
+                    .path()
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let mut tab = Tab::new(name);
+                tab.active = active == Some(index);
+                tab.modified = document.is_dirty();
+                tab
+            })
+            .collect();
+
+        let open_names: Vec<String> = self.view.tabs.iter().map(|tab| tab.name.clone()).collect();
+        let selected = self
+            .documents
+            .active()
+            .and_then(|document| document.path().file_name())
+            .map(|name| name.to_string_lossy().into_owned());
+        for entry in &mut self.view.files {
+            entry.selected = selected.as_deref() == Some(entry.name.as_str());
+            entry.modified = open_names.contains(&entry.name)
+                && self
+                    .documents
+                    .iter()
+                    .any(|d| d.is_dirty() && d.path().ends_with(&entry.name));
+        }
+
+        let Some(document) = self.documents.active() else {
+            self.view.text = String::new();
+            self.view.highlights = Vec::new();
+            self.view.selection = None;
+            self.view.dirty = false;
+            self.view.language = "—".to_string();
+            self.view.cursor_line = 0;
+            self.view.cursor_column = 0;
             return;
         };
-        let cursor = document.cursor();
 
+        let cursor = document.cursor();
         self.view.text = document.text().to_string();
         self.view.highlights = document.highlights();
         self.view.selection = document.selected_bytes();
