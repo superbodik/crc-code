@@ -4,7 +4,22 @@ use std::path::PathBuf;
 
 use winit::event_loop::{ControlFlow, EventLoop};
 
+#[cfg(windows)]
+fn speak_utf8() {
+    use windows_sys::Win32::System::Console::{SetConsoleCP, SetConsoleOutputCP};
+
+    const UTF8: u32 = 65001;
+    unsafe {
+        SetConsoleOutputCP(UTF8);
+        SetConsoleCP(UTF8);
+    }
+}
+
+#[cfg(not(windows))]
+fn speak_utf8() {}
+
 fn main() -> anyhow::Result<()> {
+    speak_utf8();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

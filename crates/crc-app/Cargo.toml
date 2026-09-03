@@ -32,3 +32,6 @@ winit = "0.30.13"
 
 [dev-dependencies]
 png = "0.18.1"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", default-features = false, features = ["Win32_System_Console"] }
