@@ -49,6 +49,9 @@ fn view() -> EditorView {
         settings: None,
         hovered_rail: None,
         hovered_explorer: None,
+        find: None,
+        matches: Vec::new(),
+        current_match: None,
         selection: None,
         dirty: false,
     }

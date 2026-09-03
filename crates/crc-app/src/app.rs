@@ -7,7 +7,7 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    palette, rail, settings as settings_view, tabs, welcome,
+    find as find_view, palette, rail, settings as settings_view, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -177,6 +177,8 @@ impl App {
             Command::OpenFile => self.pick_file(),
             Command::ShowWelcome => self.show_welcome(),
             Command::OpenSettings => self.toggle_settings(),
+            Command::Find => self.open_find(),
+            Command::FindStep { forward } => self.step_match(forward),
             Command::Copy => self.copy(false),
             Command::Cut => self.copy(true),
             Command::Paste => self.paste(),
@@ -315,6 +317,17 @@ impl App {
             self.request_redraw();
         }
 
+        if let Some(state) = self.session.view.find.as_ref() {
+            let placed = find_view::layout(layout.buffer, self.theme.scale);
+            let target = find_view::target_at(&placed, x, y);
+            if state.hovered != target
+                && let Some(state) = self.session.view.find.as_mut()
+            {
+                state.hovered = target;
+                self.request_redraw();
+            }
+        }
+
         if self.session.view.settings.is_some() && !layout.titlebar.contains(x, y) {
             self.settings_hover(x, y);
         } else if self.session.view.welcome.is_some() && !layout.titlebar.contains(x, y) {
@@ -372,6 +385,10 @@ impl App {
     fn press(&mut self, event_loop: &ActiveEventLoop) {
         let (x, y) = self.cursor;
         let layout = self.layout();
+
+        if self.session.view.find.is_some() && self.find_press(x, y) {
+            return;
+        }
 
         if self.session.view.settings.is_some()
             && !layout.titlebar.contains(x, y)
@@ -477,7 +494,7 @@ impl App {
                     self.state.sidebar_open = !self.state.sidebar_open;
                     self.store();
                 }
-                Some(rail::RailAction::Search) => self.toggle_palette(),
+                Some(rail::RailAction::Search) => self.open_find(),
                 Some(rail::RailAction::Settings) => self.toggle_settings(),
                 None => {}
             }
@@ -666,7 +683,10 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                if self.session.view.settings.is_some() {
+                if self.session.view.find.is_some()
+                    && self.find_key(&logical_key, physical_key, event_loop)
+                {
+                } else if self.session.view.settings.is_some() {
                     self.settings_key(&logical_key, physical_key);
                 } else if self.session.view.palette.is_some() {
                     self.palette_key(&logical_key, event_loop);
@@ -1305,11 +1325,194 @@ impl App {
 }
 
 
+
+impl App {
+    fn open_find(&mut self) {
+        let seed = self
+            .session
+            .document()
+            .and_then(|document| document.selected_text())
+            .filter(|text| !text.is_empty() && !text.contains('\n'))
+            .unwrap_or_else(|| {
+                self.session
+                    .view
+                    .find
+                    .as_ref()
+                    .map(|state| state.query.clone())
+                    .unwrap_or_default()
+            });
+
+        self.session.view.find = Some(find_view::FindView {
+            query: seed,
+            total: 0,
+            current: 0,
+            match_case: self
+                .session
+                .view
+                .find
+                .as_ref()
+                .is_some_and(|state| state.match_case),
+            hovered: None,
+        });
+        self.refind();
+        self.reveal_match();
+    }
+
+    fn close_find(&mut self) {
+        self.session.view.find = None;
+        self.session.view.matches.clear();
+        self.session.view.current_match = None;
+        self.request_redraw();
+    }
+
+    fn refind(&mut self) {
+        let Some(state) = self.session.view.find.as_ref() else {
+            return;
+        };
+        let query = state.query.clone();
+        let match_case = state.match_case;
+
+        let found: Vec<std::ops::Range<usize>> = match self.session.document() {
+            Some(document) => document
+                .find(&query, match_case)
+                .into_iter()
+                .map(|range| document.byte_range(range))
+                .collect(),
+            None => Vec::new(),
+        };
+
+        let total = found.len();
+        self.session.view.matches = found;
+
+        if let Some(state) = self.session.view.find.as_mut() {
+            state.total = total;
+            if state.current >= total {
+                state.current = 0;
+            }
+        }
+        self.session.view.current_match = (total > 0)
+            .then(|| self.session.view.find.as_ref().map(|state| state.current))
+            .flatten();
+    }
+
+    fn step_match(&mut self, forward: bool) {
+        if let Some(state) = self.session.view.find.as_mut() {
+            state.step(forward);
+        }
+        self.refind();
+        self.reveal_match();
+    }
+
+    fn reveal_match(&mut self) {
+        let Some(index) = self.session.view.current_match else {
+            self.request_redraw();
+            return;
+        };
+        let Some(found) = self.session.view.matches.get(index).cloned() else {
+            return;
+        };
+
+        let line = if let Some(document) = self.session.document() {
+            let chars = document.char_range(found);
+            document.select_range(chars.clone());
+            document.point_of(chars.start).line
+        } else {
+            return;
+        };
+
+        self.session.sync();
+        let rows = self.rows().max(1);
+        let first = self.session.view.scroll_line;
+        if line < first || line >= first + rows {
+            self.session
+                .scroll_to(line.saturating_sub(rows / 3));
+        }
+        self.request_redraw();
+    }
+
+    fn find_press(&mut self, x: f32, y: f32) -> bool {
+        let layout = self.layout();
+        let placed = find_view::layout(layout.buffer, self.theme.scale);
+
+        match find_view::target_at(&placed, x, y) {
+            Some(find_view::Target::Close) => self.close_find(),
+            Some(find_view::Target::Next) => self.step_match(true),
+            Some(find_view::Target::Previous) => self.step_match(false),
+            Some(find_view::Target::MatchCase) => {
+                if let Some(state) = self.session.view.find.as_mut() {
+                    state.match_case = !state.match_case;
+                }
+                self.refind();
+                self.reveal_match();
+            }
+            Some(find_view::Target::Field) => {}
+            None => return false,
+        }
+        true
+    }
+
+    fn find_key(
+        &mut self,
+        key: &Key,
+        physical: PhysicalKey,
+        event_loop: &ActiveEventLoop,
+    ) -> bool {
+        if let Some(chord) = crate::input::chord(key, physical, self.modifiers)
+            && let Some(name) = self.keymap.command(&chord)
+            && name != "find"
+            && let Some(command) = command_named(name)
+        {
+            self.apply(command, event_loop);
+            return true;
+        }
+
+        match key {
+            Key::Named(NamedKey::Escape) => {
+                self.close_find();
+                true
+            }
+            Key::Named(NamedKey::Enter) => {
+                self.step_match(!self.modifiers.shift_key());
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(state) = self.session.view.find.as_mut() {
+                    state.query.pop();
+                    state.current = 0;
+                }
+                self.refind();
+                self.reveal_match();
+                true
+            }
+            Key::Character(text) if !self.modifiers.control_key() && !self.modifiers.alt_key() => {
+                if let Some(state) = self.session.view.find.as_mut() {
+                    state.query.push_str(text);
+                    state.current = 0;
+                }
+                self.refind();
+                self.reveal_match();
+                true
+            }
+            Key::Named(NamedKey::Space) if !self.modifiers.control_key() => {
+                if let Some(state) = self.session.view.find.as_mut() {
+                    state.query.push(' ');
+                    state.current = 0;
+                }
+                self.refind();
+                self.reveal_match();
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 fn actions(keymap: &Keymap) -> Vec<Action> {
     let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
         Action::new("open-folder", "Открыть папку проекта", "Файл").hint(hint("open-folder")),
         Action::new("open-file", "Открыть файл", "Файл").hint(hint("open-file")),
+        Action::new("find", "Найти в файле", "Правка").hint(hint("find")),
         Action::new("settings", "Настройки", "Вид").hint(hint("settings")),
         Action::new("copy", "Копировать", "Правка").hint(hint("copy")),
         Action::new("cut", "Вырезать", "Правка").hint(hint("cut")),

@@ -1,5 +1,6 @@
 pub mod controls;
 pub mod explorer;
+pub mod find;
 pub mod hit;
 pub mod logo;
 pub mod palette;
@@ -19,6 +20,7 @@ pub use hit::{
 };
 pub use rail::RailAction;
 pub use logo::{Mark, clear_space, mark};
+pub use find::FindView;
 pub use palette::{Action, PaletteView};
 pub use selection::{Band, bands};
 pub use settings::{BindingRow, Section, SettingsView, Toggle};

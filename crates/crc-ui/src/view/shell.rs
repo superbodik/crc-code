@@ -10,6 +10,7 @@ use crate::view::selection::bands;
 use crate::view::state::{CodeMetrics, EditorView};
 use crate::view::tabs;
 use crate::icon;
+use crate::view::find as find_view;
 use crate::view::hit;
 use crate::view::rail as rail_view;
 use crate::view::settings as settings_view;
@@ -36,6 +37,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     panel(&mut frame, layout, theme);
     aside(&mut frame, layout, theme);
     statusbar(&mut frame, layout, theme, view);
+    find_bar(&mut frame, layout, theme, view);
     settings_panel(&mut frame, layout, theme, view);
     command_palette(&mut frame, layout, theme, view);
 
@@ -414,6 +416,35 @@ fn editor(
             ),
             theme.syntax.current_line,
         ));
+    }
+
+    for (index, found) in view.matches.iter().enumerate() {
+        let Some(local) = visible.local(found) else {
+            continue;
+        };
+        let current = view.current_match == Some(index);
+
+        for band in bands(&visible.text, &local) {
+            if band.row >= rows {
+                break;
+            }
+            let x = buffer.x + band.start_column as f32 * metrics.char_width;
+            let width = (band.end_column - band.start_column) as f32 * metrics.char_width;
+            let rect = Rect::new(
+                x,
+                buffer.y + band.row as f32 * metrics.line_height,
+                width.min(buffer.right() - x),
+                metrics.line_height,
+            );
+
+            frame.quad(if current {
+                Quad::filled(rect, theme.chrome.accent_solid).rounded(2.0)
+            } else {
+                Quad::filled(rect, theme.chrome.accent_wash)
+                    .rounded(2.0)
+                    .bordered(1.0, theme.chrome.accent)
+            });
+        }
     }
 
     if let Some(selected) = view.selection.as_ref()
@@ -1345,5 +1376,105 @@ fn settings_panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &Edito
                 );
             }
         }
+    }
+}
+
+fn find_bar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.find.as_ref() else {
+        return;
+    };
+
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+    let placed = find_view::layout(layout.buffer, theme.scale);
+
+    frame.overlay_quad(
+        Quad::filled(placed.bar, theme.chrome.raised)
+            .rounded(metrics.corner_radius)
+            .bordered(metrics.border_width, theme.chrome.border),
+    );
+
+    frame.overlay_quad(
+        Quad::filled(placed.field, theme.chrome.surface)
+            .rounded(metrics.corner_radius_small)
+            .bordered(metrics.border_width, theme.chrome.accent),
+    );
+
+    let empty = state.query.is_empty();
+    frame.overlay_text(
+        TextRun::new(
+            if empty {
+                "Найти в файле".to_string()
+            } else {
+                state.query.clone()
+            },
+            placed.field.inset_by(10.0 * theme.scale, 0.0),
+            type_scale.body,
+            if empty {
+                theme.chrome.text_faint
+            } else {
+                theme.chrome.text_strong
+            },
+        )
+        .line_height(placed.field.height),
+    );
+
+    frame.overlay_text(
+        TextRun::new(
+            state.tally(),
+            placed.tally,
+            type_scale.small,
+            if state.total == 0 && !empty {
+                theme.chrome.danger
+            } else {
+                theme.chrome.text_faint
+            },
+        )
+        .align(TextAlign::End)
+        .line_height(placed.tally.height),
+    );
+
+    for target in [
+        find_view::Target::MatchCase,
+        find_view::Target::Previous,
+        find_view::Target::Next,
+        find_view::Target::Close,
+    ] {
+        let rect = match target {
+            find_view::Target::MatchCase => placed.match_case,
+            find_view::Target::Previous => placed.previous,
+            find_view::Target::Next => placed.next,
+            find_view::Target::Close => placed.close,
+            find_view::Target::Field => continue,
+        };
+        let on = target == find_view::Target::MatchCase && state.match_case;
+        let hovered = state.hovered == Some(target);
+
+        if on || hovered {
+            frame.overlay_quad(
+                Quad::filled(
+                    rect,
+                    if on {
+                        theme.chrome.selected
+                    } else {
+                        theme.chrome.hover
+                    },
+                )
+                .rounded(metrics.corner_radius_small),
+            );
+        }
+
+        frame.overlay_text(TextRun::icon(
+            find_view::glyph(target),
+            rect,
+            14.0,
+            if on {
+                theme.chrome.accent
+            } else if hovered {
+                theme.chrome.text_strong
+            } else {
+                theme.chrome.text_faint
+            },
+        ));
     }
 }

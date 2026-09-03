@@ -263,6 +263,11 @@ impl Session {
         self.view.scroll_line = target.clamp(0, last as isize) as usize;
     }
 
+    pub fn scroll_to(&mut self, line: usize) {
+        let last = self.view.line_count().saturating_sub(1);
+        self.view.scroll_line = line.min(last);
+    }
+
     pub fn follow_cursor(&mut self, rows: usize) {
         if rows == 0 {
             return;

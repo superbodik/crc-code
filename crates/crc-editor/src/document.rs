@@ -161,6 +161,75 @@ impl Document {
         self.place(start, false);
     }
 
+    pub fn find(&self, needle: &str, case_sensitive: bool) -> Vec<Range<usize>> {
+        if needle.is_empty() {
+            return Vec::new();
+        }
+
+        let haystack = if case_sensitive {
+            self.text.clone()
+        } else {
+            self.text.to_lowercase()
+        };
+        let needle = if case_sensitive {
+            needle.to_string()
+        } else {
+            needle.to_lowercase()
+        };
+
+        if haystack.len() != self.text.len() {
+            return self.find_slowly(&needle);
+        }
+
+        let mut found = Vec::new();
+        let mut at = 0;
+        while let Some(offset) = haystack[at..].find(&needle) {
+            let start = at + offset;
+            let end = start + needle.len();
+            found.push(self.buffer.byte_to_char(start)..self.buffer.byte_to_char(end));
+            at = start + needle.chars().next().map_or(1, |c| c.len_utf8());
+        }
+        found
+    }
+
+    fn find_slowly(&self, needle: &str) -> Vec<Range<usize>> {
+        let chars: Vec<char> = self.text.chars().collect();
+        let lowered: Vec<char> = chars
+            .iter()
+            .flat_map(|c| c.to_lowercase())
+            .collect::<Vec<char>>();
+        if lowered.len() != chars.len() {
+            return Vec::new();
+        }
+
+        let wanted: Vec<char> = needle.chars().collect();
+        let mut found = Vec::new();
+        if wanted.is_empty() || wanted.len() > lowered.len() {
+            return found;
+        }
+
+        for start in 0..=lowered.len() - wanted.len() {
+            if lowered[start..start + wanted.len()] == wanted[..] {
+                found.push(start..start + wanted.len());
+            }
+        }
+        found
+    }
+
+    pub fn byte_range(&self, chars: Range<usize>) -> Range<usize> {
+        self.buffer.char_to_byte(chars.start)..self.buffer.char_to_byte(chars.end)
+    }
+
+    pub fn char_range(&self, bytes: Range<usize>) -> Range<usize> {
+        self.buffer.byte_to_char(bytes.start)..self.buffer.byte_to_char(bytes.end)
+    }
+
+    pub fn select_range(&mut self, range: Range<usize>) {
+        let len = self.buffer.len_chars();
+        self.selection = Selection::new(range.start.min(len), range.end.min(len));
+        self.goal_column = None;
+    }
+
     pub fn selected_text(&self) -> Option<String> {
         self.selected_bytes().map(|range| self.text[range].to_string())
     }
