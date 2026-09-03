@@ -7,7 +7,8 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    find as find_view, palette, rail, settings as settings_view, tabs, welcome,
+    find as find_view, palette, rail, search as search_view, settings as settings_view, tabs,
+    welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -178,6 +179,7 @@ impl App {
             Command::ShowWelcome => self.show_welcome(),
             Command::OpenSettings => self.toggle_settings(),
             Command::Find => self.open_find(),
+            Command::SearchProject => self.toggle_search(),
             Command::FindStep { forward } => self.step_match(forward),
             Command::Copy => self.copy(false),
             Command::Cut => self.copy(true),
@@ -494,7 +496,7 @@ impl App {
                     self.state.sidebar_open = !self.state.sidebar_open;
                     self.store();
                 }
-                Some(rail::RailAction::Search) => self.open_find(),
+                Some(rail::RailAction::Search) => self.toggle_search(),
                 Some(rail::RailAction::Settings) => self.toggle_settings(),
                 None => {}
             }
@@ -505,6 +507,11 @@ impl App {
             && sidebar.contains(x, y)
         {
             let metrics = self.theme.metrics();
+
+            if self.session.view.search.is_some() {
+                self.search_press(sidebar, x, y);
+                return;
+            }
 
             if let Some(button) = view::explorer_button_at(sidebar, &metrics, x, y) {
                 match button {
@@ -683,9 +690,7 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                if self.session.view.find.is_some()
-                    && self.find_key(&logical_key, physical_key, event_loop)
-                {
+                if self.overlay_key(&logical_key, physical_key, event_loop) {
                 } else if self.session.view.settings.is_some() {
                     self.settings_key(&logical_key, physical_key);
                 } else if self.session.view.palette.is_some() {
@@ -1507,12 +1512,190 @@ impl App {
     }
 }
 
+
+impl App {
+    fn toggle_search(&mut self) {
+        if self.session.view.search.is_some() {
+            self.session.view.search = None;
+            self.request_redraw();
+            return;
+        }
+
+        let seed = self
+            .session
+            .document()
+            .and_then(|document| document.selected_text())
+            .filter(|text| !text.is_empty() && !text.contains('\n'))
+            .unwrap_or_default();
+
+        self.state.sidebar_open = true;
+        self.session.view.search = Some(search_view::SearchView {
+            query: seed,
+            ..search_view::SearchView::default()
+        });
+        self.research();
+    }
+
+    fn research(&mut self) {
+        let Some(state) = self.session.view.search.as_ref() else {
+            return;
+        };
+        let query = state.query.clone();
+        let match_case = state.match_case;
+
+        if query.trim().is_empty() {
+            if let Some(state) = self.session.view.search.as_mut() {
+                state.rows.clear();
+                state.files = 0;
+                state.hits = 0;
+                state.selected = None;
+                state.scroll = 0;
+                state.searched = false;
+            }
+            self.request_redraw();
+            return;
+        }
+
+        let found = self.session.search_project(&query, match_case);
+        let (rows, files, hits) = search_view::SearchView::fold(&found);
+
+        if let Some(state) = self.session.view.search.as_mut() {
+            state.rows = rows;
+            state.files = files;
+            state.hits = hits;
+            state.selected = None;
+            state.scroll = 0;
+            state.searched = true;
+        }
+        self.request_redraw();
+    }
+
+    fn search_press(&mut self, sidebar: Rect, x: f32, y: f32) {
+        let Some(state) = self.session.view.search.as_ref() else {
+            return;
+        };
+        let metrics = self.theme.metrics();
+        let placed = search_view::layout(sidebar, state, &metrics);
+
+        match search_view::target_at(&placed, state, x, y) {
+            Some(search_view::Target::MatchCase) => {
+                if let Some(state) = self.session.view.search.as_mut() {
+                    state.match_case = !state.match_case;
+                }
+                self.research();
+            }
+            Some(search_view::Target::Row(index)) => self.open_hit(index),
+            Some(search_view::Target::Field) | None => {}
+        }
+    }
+
+    fn open_hit(&mut self, index: usize) {
+        let Some(row) = self
+            .session
+            .view
+            .search
+            .as_ref()
+            .and_then(|state| state.rows.get(index).cloned())
+        else {
+            return;
+        };
+
+        if let Some(state) = self.session.view.search.as_mut() {
+            state.selected = Some(index);
+        }
+
+        if self.session.open_file(row.path()).is_err() {
+            return;
+        }
+
+        if let search_view::SearchRow::Line { line, .. } = row {
+            let target = (line as usize).saturating_sub(1);
+            if let Some(document) = self.session.document() {
+                let offset = document.offset_at(crc_text::Point::new(target, 0));
+                document.select_range(offset..offset);
+            }
+            self.session.sync();
+            let rows = self.rows().max(1);
+            self.session.scroll_to(target.saturating_sub(rows / 3));
+        }
+
+        self.last_edit = None;
+        self.refresh_welcome();
+        self.request_redraw();
+    }
+
+    fn overlay_key(
+        &mut self,
+        key: &Key,
+        physical: PhysicalKey,
+        event_loop: &ActiveEventLoop,
+    ) -> bool {
+        if self.session.view.search.is_some() && self.search_key(key, physical, event_loop) {
+            return true;
+        }
+        self.session.view.find.is_some() && self.find_key(key, physical, event_loop)
+    }
+
+    fn search_key(
+        &mut self,
+        key: &Key,
+        physical: PhysicalKey,
+        event_loop: &ActiveEventLoop,
+    ) -> bool {
+        if let Some(chord) = crate::input::chord(key, physical, self.modifiers)
+            && let Some(name) = self.keymap.command(&chord)
+            && let Some(command) = command_named(name)
+        {
+            self.apply(command, event_loop);
+            return true;
+        }
+
+        match key {
+            Key::Named(NamedKey::Escape) => {
+                self.session.view.search = None;
+                self.request_redraw();
+                true
+            }
+            Key::Named(NamedKey::Enter) => {
+                self.research();
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(state) = self.session.view.search.as_mut() {
+                    state.query.pop();
+                    state.searched = false;
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Named(NamedKey::Space) if !self.modifiers.control_key() => {
+                if let Some(state) = self.session.view.search.as_mut() {
+                    state.query.push(' ');
+                    state.searched = false;
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Character(text) if !self.modifiers.control_key() && !self.modifiers.alt_key() => {
+                if let Some(state) = self.session.view.search.as_mut() {
+                    state.query.push_str(text);
+                    state.searched = false;
+                }
+                self.request_redraw();
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 fn actions(keymap: &Keymap) -> Vec<Action> {
     let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
         Action::new("open-folder", "Открыть папку проекта", "Файл").hint(hint("open-folder")),
         Action::new("open-file", "Открыть файл", "Файл").hint(hint("open-file")),
         Action::new("find", "Найти в файле", "Правка").hint(hint("find")),
+        Action::new("search", "Найти по проекту", "Правка").hint(hint("search")),
         Action::new("settings", "Настройки", "Вид").hint(hint("settings")),
         Action::new("copy", "Копировать", "Правка").hint(hint("copy")),
         Action::new("cut", "Вырезать", "Правка").hint(hint("cut")),

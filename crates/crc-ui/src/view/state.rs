@@ -8,6 +8,7 @@ use crate::view::palette::PaletteView;
 use crate::view::find::FindView;
 use crate::view::hit::ExplorerButton;
 use crate::view::rail::RailAction;
+use crate::view::search::SearchView;
 use crate::view::settings::SettingsView;
 use crate::view::welcome::WelcomeView;
 
@@ -108,6 +109,7 @@ pub struct EditorView {
     pub welcome: Option<WelcomeView>,
     pub settings: Option<SettingsView>,
     pub find: Option<FindView>,
+    pub search: Option<SearchView>,
     pub matches: Vec<Range<usize>>,
     pub current_match: Option<usize>,
     pub hovered_rail: Option<RailAction>,

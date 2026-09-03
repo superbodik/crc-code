@@ -263,6 +263,39 @@ impl Session {
         self.view.scroll_line = target.clamp(0, last as isize) as usize;
     }
 
+    pub fn search_project(
+        &mut self,
+        pattern: &str,
+        case_sensitive: bool,
+    ) -> Vec<(PathBuf, Vec<(u64, String)>)> {
+        if pattern.trim().is_empty() {
+            return Vec::new();
+        }
+
+        let mut query = crc_core::fs::TextQuery::literal(pattern);
+        query.case_sensitive = case_sensitive;
+        query.max_files = 200;
+        query.max_matches_per_file = 20;
+
+        match self.runtime.block_on(self.engine.search_text(query)) {
+            Ok(found) => found
+                .into_iter()
+                .map(|file| {
+                    let lines = file
+                        .matches
+                        .into_iter()
+                        .map(|hit| (hit.line, hit.text))
+                        .collect();
+                    (file.path, lines)
+                })
+                .collect(),
+            Err(error) => {
+                tracing::warn!("search failed: {error}");
+                Vec::new()
+            }
+        }
+    }
+
     pub fn scroll_to(&mut self, line: usize) {
         let last = self.view.line_count().saturating_sub(1);
         self.view.scroll_line = line.min(last);

@@ -158,3 +158,42 @@ mod windows_habits {
         );
     }
 }
+
+mod searching {
+    use super::*;
+
+    #[test]
+    fn find_and_search_sit_on_f_with_and_without_shift() {
+        assert!(matches!(
+            command(latin("а"), code(KeyCode::KeyF), ctrl()),
+            Some(Command::Find)
+        ));
+        assert!(
+            matches!(
+                command(
+                    latin("А"),
+                    code(KeyCode::KeyF),
+                    ModifiersState::CONTROL | ModifiersState::SHIFT
+                ),
+                Some(Command::SearchProject)
+            ),
+            "Ctrl+Shift+F must reach the project search"
+        );
+    }
+
+    #[test]
+    fn opening_a_file_and_a_folder_are_told_apart_by_shift() {
+        assert!(matches!(
+            command(latin("щ"), code(KeyCode::KeyO), ctrl()),
+            Some(Command::OpenFolder)
+        ));
+        assert!(matches!(
+            command(
+                latin("Щ"),
+                code(KeyCode::KeyO),
+                ModifiersState::CONTROL | ModifiersState::SHIFT
+            ),
+            Some(Command::OpenFile)
+        ));
+    }
+}

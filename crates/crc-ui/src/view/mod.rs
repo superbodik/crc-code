@@ -5,6 +5,7 @@ pub mod hit;
 pub mod logo;
 pub mod palette;
 pub mod rail;
+pub mod search;
 pub mod selection;
 pub mod settings;
 pub mod shell;
@@ -19,6 +20,7 @@ pub use hit::{
     explorer_row,
 };
 pub use rail::RailAction;
+pub use search::{SearchRow, SearchView};
 pub use logo::{Mark, clear_space, mark};
 pub use find::FindView;
 pub use palette::{Action, PaletteView};

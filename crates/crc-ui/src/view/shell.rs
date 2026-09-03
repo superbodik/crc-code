@@ -13,6 +13,7 @@ use crate::icon;
 use crate::view::find as find_view;
 use crate::view::hit;
 use crate::view::rail as rail_view;
+use crate::view::search as search_view;
 use crate::view::settings as settings_view;
 use crate::view::welcome;
 
@@ -143,7 +144,7 @@ fn rail(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
         let button = rail_view::button(rail, &metrics, index);
         let current = match action {
             rail_view::RailAction::Explorer => layout.sidebar.is_some(),
-            rail_view::RailAction::Search => false,
+            rail_view::RailAction::Search => view.search.is_some(),
             rail_view::RailAction::Settings => view.settings.is_some(),
         };
         let hovered = view.hovered_rail == Some(action);
@@ -186,6 +187,11 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
 
     frame.quad(Quad::filled(sidebar, theme.chrome.panel));
     hairline_right(frame, sidebar, theme.chrome.border);
+
+    if view.search.is_some() {
+        search_panel(frame, sidebar, theme, view);
+        return;
+    }
 
     let header = Rect::new(
         sidebar.x,
@@ -1476,5 +1482,160 @@ fn find_bar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView)
                 theme.chrome.text_faint
             },
         ));
+    }
+}
+
+fn search_panel(frame: &mut Frame, sidebar: Rect, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.search.as_ref() else {
+        return;
+    };
+
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+    let placed = search_view::layout(sidebar, state, &metrics);
+
+    frame.text(
+        TextRun::new(
+            "Поиск по проекту",
+            placed.header.inset_by(metrics.panel_padding, 0.0),
+            type_scale.small,
+            theme.chrome.text_muted,
+        )
+        .weight(Weight::Semibold)
+        .line_height(placed.header.height),
+    );
+
+    frame.quad(
+        Quad::filled(placed.field, theme.chrome.surface)
+            .rounded(metrics.corner_radius_small)
+            .bordered(metrics.border_width, theme.chrome.accent),
+    );
+
+    let empty = state.query.is_empty();
+    frame.text(
+        TextRun::new(
+            if empty {
+                "Что искать".to_string()
+            } else {
+                state.query.clone()
+            },
+            placed.field.inset_by(8.0, 0.0),
+            type_scale.body,
+            if empty {
+                theme.chrome.text_faint
+            } else {
+                theme.chrome.text_strong
+            },
+        )
+        .line_height(placed.field.height),
+    );
+
+    if state.match_case {
+        frame.quad(
+            Quad::filled(placed.match_case, theme.chrome.selected)
+                .rounded(metrics.corner_radius_small),
+        );
+    }
+    frame.text(TextRun::icon(
+        icon::MATCH_CASE,
+        placed.match_case,
+        13.0,
+        if state.match_case {
+            theme.chrome.accent
+        } else {
+            theme.chrome.text_faint
+        },
+    ));
+
+    frame.text(
+        TextRun::new(
+            state.tally(),
+            placed.tally,
+            type_scale.small,
+            if state.searched && state.hits == 0 && !empty {
+                theme.chrome.danger
+            } else {
+                theme.chrome.text_faint
+            },
+        )
+        .line_height(placed.tally.height),
+    );
+
+    for (offset, rect) in placed.rows.iter().enumerate() {
+        let index = offset + state.scroll;
+        let Some(row) = state.rows.get(index) else {
+            break;
+        };
+
+        if state.selected == Some(index) {
+            frame.quad(
+                Quad::filled(rect.inset_by(4.0, 1.0), theme.chrome.selected)
+                    .rounded(metrics.corner_radius_small),
+            );
+        } else if state.hovered == Some(index) {
+            frame.quad(
+                Quad::filled(rect.inset_by(4.0, 1.0), theme.chrome.hover)
+                    .rounded(metrics.corner_radius_small),
+            );
+        }
+
+        match row {
+            search_view::SearchRow::File { path, hits } => {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.to_string_lossy().into_owned());
+
+                frame.text(TextRun::icon(
+                    icon::for_name(&name),
+                    Rect::new(rect.x + 8.0, rect.y, 16.0, rect.height),
+                    12.0,
+                    theme.chrome.text_faint,
+                ));
+                frame.text(
+                    TextRun::new(
+                        name,
+                        Rect::new(rect.x + 26.0, rect.y, rect.width - 60.0, rect.height),
+                        type_scale.small,
+                        theme.chrome.text_strong,
+                    )
+                    .weight(Weight::Semibold)
+                    .line_height(rect.height),
+                );
+                frame.text(
+                    TextRun::new(
+                        hits.to_string(),
+                        Rect::new(rect.x, rect.y, rect.width - 10.0, rect.height),
+                        type_scale.small,
+                        theme.chrome.text_faint,
+                    )
+                    .align(TextAlign::End)
+                    .line_height(rect.height),
+                );
+            }
+            search_view::SearchRow::Line { line, text, .. } => {
+                frame.text(
+                    TextRun::new(
+                        line.to_string(),
+                        Rect::new(rect.x + 20.0, rect.y, 32.0, rect.height),
+                        type_scale.small,
+                        theme.chrome.text_faint,
+                    )
+                    .align(TextAlign::End)
+                    .mono()
+                    .line_height(rect.height),
+                );
+                frame.text(
+                    TextRun::new(
+                        text.trim_start().to_string(),
+                        Rect::new(rect.x + 58.0, rect.y, rect.width - 64.0, rect.height),
+                        type_scale.small,
+                        theme.chrome.text,
+                    )
+                    .mono()
+                    .line_height(rect.height),
+                );
+            }
+        }
     }
 }
