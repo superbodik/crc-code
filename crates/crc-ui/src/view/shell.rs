@@ -12,6 +12,7 @@ use crate::view::tabs;
 use crate::icon;
 use crate::view::find as find_view;
 use crate::view::hit;
+use crate::view::panel as panel_view;
 use crate::view::rail as rail_view;
 use crate::view::search as search_view;
 use crate::view::settings as settings_view;
@@ -35,7 +36,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     breadcrumbs(&mut frame, layout, theme, view);
     editor(&mut frame, layout, theme, view, metrics);
     minimap(&mut frame, layout, theme, view);
-    panel(&mut frame, layout, theme);
+    panel(&mut frame, layout, theme, view);
     aside(&mut frame, layout, theme);
     statusbar(&mut frame, layout, theme, view);
     find_bar(&mut frame, layout, theme, view);
@@ -543,10 +544,11 @@ fn minimap(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
     }
 }
 
-fn panel(frame: &mut Frame, layout: &Shell, theme: &Theme) {
+fn panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
     let Some(panel) = layout.panel else { return };
     let metrics = theme.metrics();
     let scale = theme.type_scale;
+    let state = &view.panel;
 
     frame.quad(Quad::filled(panel, theme.chrome.panel));
     frame.quad(Quad::filled(
@@ -554,51 +556,148 @@ fn panel(frame: &mut Frame, layout: &Shell, theme: &Theme) {
         theme.chrome.border,
     ));
 
-    let header = Rect::new(panel.x, panel.y, panel.width, metrics.row_height + 6.0);
-    let mut x = header.x + metrics.panel_padding;
-    for (index, name) in ["Терминал", "Проблемы", "Вывод", "Тесты"]
-        .iter()
-        .enumerate()
-    {
-        let width = name.chars().count() as f32 * scale.small * 0.62 + 18.0;
-        let tab = Rect::new(x, header.y + 4.0, width, header.height - 8.0);
-        if index == 0 {
+    let placed = panel_view::layout(panel, state, &metrics, scale.small * 0.62);
+
+    for (index, tab) in panel_view::PanelTab::ALL.into_iter().enumerate() {
+        let rect = placed.tabs[index];
+        let current = tab == state.tab;
+
+        if current {
             frame.quad(
-                Quad::filled(tab, theme.chrome.selected).rounded(metrics.corner_radius_small),
+                Quad::filled(rect, theme.chrome.selected).rounded(metrics.corner_radius_small),
             );
         }
+
+        frame.text(TextRun::icon(
+            tab.glyph(),
+            Rect::new(rect.x + 6.0, rect.y, 14.0, rect.height),
+            11.0,
+            if current {
+                theme.chrome.text_strong
+            } else {
+                theme.chrome.text_faint
+            },
+        ));
+
+        let count = state.count(tab);
+        let label = if count > 0 {
+            format!("{} {count}", tab.title())
+        } else {
+            tab.title().to_string()
+        };
+
         frame.text(
             TextRun::new(
-                *name,
-                tab.inset_by(9.0, 0.0),
+                label,
+                Rect::new(rect.x + 20.0, rect.y, rect.width - 24.0, rect.height),
                 scale.small,
-                if index == 0 {
+                if current {
                     theme.chrome.text_strong
                 } else {
                     theme.chrome.text_muted
                 },
             )
-            .line_height(tab.height),
+            .line_height(rect.height),
         );
-        x += width + 4.0;
     }
 
-    let body = Rect::new(
-        panel.x + metrics.panel_padding,
-        header.bottom(),
-        panel.width - metrics.panel_padding * 2.0,
-        panel.height - header.height - metrics.panel_padding,
-    );
-    frame.text(
-        TextRun::new(
-            "crc ~ $ cargo test\n   Compiling crc-ui v0.1.0\n    Finished in 2.30s",
-            body,
-            scale.small,
-            theme.chrome.text_muted,
-        )
-        .mono()
-        .line_height(scale.small * 1.6),
-    );
+    if state.rows() == 0 {
+        frame.text(
+            TextRun::new(
+                state.empty_note(),
+                placed.body.inset_by(metrics.panel_padding, 8.0),
+                scale.small,
+                theme.chrome.text_faint,
+            )
+            .line_height(metrics.row_height),
+        );
+        return;
+    }
+
+    for (offset, rect) in placed.rows.iter().enumerate() {
+        let index = offset + state.scroll;
+
+        if state.selected == Some(index) {
+            frame.quad(
+                Quad::filled(rect.inset_by(4.0, 0.0), theme.chrome.selected)
+                    .rounded(metrics.corner_radius_small),
+            );
+        } else if state.hovered == Some(index) {
+            frame.quad(
+                Quad::filled(rect.inset_by(4.0, 0.0), theme.chrome.hover)
+                    .rounded(metrics.corner_radius_small),
+            );
+        }
+
+        match state.tab {
+            panel_view::PanelTab::Problems => {
+                let Some(problem) = state.problems.get(index) else {
+                    break;
+                };
+
+                frame.text(TextRun::icon(
+                    icon::PROBLEMS,
+                    Rect::new(rect.x + metrics.panel_padding, rect.y, 14.0, rect.height),
+                    11.0,
+                    theme.chrome.warning,
+                ));
+                frame.text(
+                    TextRun::new(
+                        format!("{}:{}", problem.line + 1, problem.column + 1),
+                        Rect::new(rect.x + metrics.panel_padding + 18.0, rect.y, 68.0, rect.height),
+                        scale.small,
+                        theme.chrome.text_faint,
+                    )
+                    .mono()
+                    .line_height(rect.height),
+                );
+                frame.text(
+                    TextRun::new(
+                        problem.message.clone(),
+                        Rect::new(
+                            rect.x + metrics.panel_padding + 90.0,
+                            rect.y,
+                            (rect.width - 240.0).max(0.0),
+                            rect.height,
+                        ),
+                        scale.small,
+                        theme.chrome.text,
+                    )
+                    .line_height(rect.height),
+                );
+                frame.text(
+                    TextRun::new(
+                        problem.file.clone(),
+                        Rect::new(rect.x, rect.y, rect.width - metrics.panel_padding, rect.height),
+                        scale.small,
+                        theme.chrome.text_faint,
+                    )
+                    .align(TextAlign::End)
+                    .line_height(rect.height),
+                );
+            }
+            panel_view::PanelTab::Output => {
+                let Some(line) = state.output.get(index) else {
+                    break;
+                };
+                frame.text(
+                    TextRun::new(
+                        line.clone(),
+                        Rect::new(
+                            rect.x + metrics.panel_padding,
+                            rect.y,
+                            rect.width - metrics.panel_padding * 2.0,
+                            rect.height,
+                        ),
+                        scale.small,
+                        theme.chrome.text,
+                    )
+                    .mono()
+                    .line_height(rect.height),
+                );
+            }
+        }
+    }
 }
 
 fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme) {

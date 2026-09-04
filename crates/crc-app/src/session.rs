@@ -201,6 +201,8 @@ impl Session {
     }
 
     pub fn sync(&mut self) {
+        self.refresh_problems();
+        self.view.problems = self.view.panel.problems.len();
         let active = self.documents.active_index();
 
         self.view.tabs = self
@@ -293,6 +295,41 @@ impl Session {
                 tracing::warn!("search failed: {error}");
                 Vec::new()
             }
+        }
+    }
+
+    pub fn refresh_problems(&mut self) {
+        let mut problems = Vec::new();
+
+        for index in 0..self.documents.len() {
+            let Some(document) = self.documents.get(index) else {
+                continue;
+            };
+            let file = document
+                .path()
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| document.path().to_string_lossy().into_owned());
+
+            for fault in document.faults() {
+                problems.push(crc_ui::view::panel::Problem {
+                    file: file.clone(),
+                    line: fault.line,
+                    column: fault.column,
+                    message: fault.message(),
+                });
+            }
+        }
+
+        problems.truncate(500);
+        self.view.panel.problems = problems;
+    }
+
+    pub fn say(&mut self, line: impl Into<String>) {
+        self.view.panel.output.push(line.into());
+        if self.view.panel.output.len() > 500 {
+            let drop = self.view.panel.output.len() - 500;
+            self.view.panel.output.drain(0..drop);
         }
     }
 

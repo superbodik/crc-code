@@ -7,8 +7,8 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    find as find_view, palette, rail, search as search_view, settings as settings_view, tabs,
-    welcome,
+    find as find_view, palette, panel as panel_view, rail, search as search_view,
+    settings as settings_view, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -487,6 +487,13 @@ impl App {
             None => {}
         }
 
+        if let Some(bottom) = layout.panel
+            && bottom.contains(x, y)
+        {
+            self.panel_press(bottom, x, y);
+            return;
+        }
+
         if let Some(rail_bar) = layout.rail
             && rail_bar.contains(x, y)
         {
@@ -574,6 +581,15 @@ impl ApplicationHandler for App {
                 println!("fonts: {sans} / {mono}");
                 println!("workspace: {}", self.session.root().display());
                 println!("scale: {}", window.scale_factor());
+
+                let adapter = renderer.adapter().to_string();
+                let fonts = format!("{sans} / {mono}");
+                let root = self.session.root().display().to_string();
+                let scale = window.scale_factor();
+                self.session.say(format!("видеокарта: {adapter}"));
+                self.session.say(format!("шрифты: {fonts}"));
+                self.session.say(format!("проект: {root}"));
+                self.session.say(format!("масштаб: {scale}"));
                 self.renderer = Some(renderer);
             }
             Err(error) => {
@@ -1686,6 +1702,52 @@ impl App {
             }
             _ => false,
         }
+    }
+}
+
+
+impl App {
+    fn panel_press(&mut self, panel: Rect, x: f32, y: f32) {
+        let metrics = self.theme.metrics();
+        let glyph = self.theme.type_scale.small * 0.62;
+        let placed = panel_view::layout(panel, &self.session.view.panel, &metrics, glyph);
+
+        match panel_view::target_at(&placed, &self.session.view.panel, x, y) {
+            Some(panel_view::Target::Tab(index)) => {
+                if let Some(tab) = panel_view::PanelTab::ALL.get(index).copied() {
+                    self.session.view.panel.tab = tab;
+                    self.session.view.panel.scroll = 0;
+                    self.session.view.panel.selected = None;
+                    self.request_redraw();
+                }
+            }
+            Some(panel_view::Target::Row(index)) => self.open_problem(index),
+            None => {}
+        }
+    }
+
+    fn open_problem(&mut self, index: usize) {
+        self.session.view.panel.selected = Some(index);
+
+        if self.session.view.panel.tab != panel_view::PanelTab::Problems {
+            self.request_redraw();
+            return;
+        }
+
+        let Some(problem) = self.session.view.panel.problems.get(index).cloned() else {
+            return;
+        };
+
+        if let Some(document) = self.session.document() {
+            let offset = document.offset_at(crc_text::Point::new(problem.line, problem.column));
+            document.select_range(offset..offset);
+        }
+        self.session.sync();
+
+        let rows = self.rows().max(1);
+        self.session
+            .scroll_to(problem.line.saturating_sub(rows / 3));
+        self.request_redraw();
     }
 }
 

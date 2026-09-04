@@ -81,6 +81,13 @@ impl Document {
         self.buffer.commit();
     }
 
+    pub fn faults(&self) -> Vec<crc_syntax::Fault> {
+        match self.tree.as_ref() {
+            Some(tree) => tree.faults(),
+            None => Vec::new(),
+        }
+    }
+
     pub fn highlights(&self) -> Vec<(Range<usize>, Highlight)> {
         match self.tree.as_ref() {
             Some(tree) => tree

@@ -5,6 +5,7 @@ use crc_theme::Highlight;
 
 use crate::view::controls::WindowControl;
 use crate::view::palette::PaletteView;
+use crate::view::panel::PanelView;
 use crate::view::find::FindView;
 use crate::view::hit::ExplorerButton;
 use crate::view::rail::RailAction;
@@ -110,6 +111,7 @@ pub struct EditorView {
     pub settings: Option<SettingsView>,
     pub find: Option<FindView>,
     pub search: Option<SearchView>,
+    pub panel: PanelView,
     pub matches: Vec<Range<usize>>,
     pub current_match: Option<usize>,
     pub hovered_rail: Option<RailAction>,

@@ -4,6 +4,7 @@ use streaming_iterator::StreamingIterator;
 use tree_sitter::{InputEdit, Parser, Point, Query, QueryCursor, Tree};
 
 use crate::error::{Result, SyntaxError};
+use crate::fault::Fault;
 use crate::highlight::{HighlightSpan, resolve, role_for};
 use crate::language::Language;
 
@@ -95,6 +96,51 @@ impl SyntaxTree {
             old_end_position: point_at(before, old_end),
             new_end_position: point_at(after, new_end),
         });
+    }
+
+    pub fn faults(&self) -> Vec<Fault> {
+        let Some(tree) = self.tree.as_ref() else {
+            return Vec::new();
+        };
+        if !tree.root_node().has_error() {
+            return Vec::new();
+        }
+
+        let mut faults = Vec::new();
+        let mut cursor = tree.walk();
+        let mut down = true;
+
+        loop {
+            if down {
+                let node = cursor.node();
+                if node.is_error() || node.is_missing() {
+                    let start = node.start_position();
+                    faults.push(Fault {
+                        range: node.byte_range(),
+                        line: start.row,
+                        column: start.column,
+                        missing: node.is_missing(),
+                        kind: node.kind().to_string(),
+                    });
+                    down = false;
+                } else if node.has_error() && cursor.goto_first_child() {
+                    continue;
+                } else {
+                    down = false;
+                }
+            }
+
+            if cursor.goto_next_sibling() {
+                down = true;
+                continue;
+            }
+            if !cursor.goto_parent() {
+                break;
+            }
+        }
+
+        faults.truncate(200);
+        faults
     }
 
     pub fn highlights(&self, text: &str) -> Vec<HighlightSpan> {
