@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod controls;
 pub mod explorer;
 pub mod find;
@@ -26,6 +27,7 @@ pub use rail::RailAction;
 pub use search::{SearchRow, SearchView};
 pub use logo::{Mark, clear_space, mark};
 pub use find::FindView;
+pub use agent::AgentView;
 pub use menu::{MenuAction, MenuItem, MenuView};
 pub use palette::{Action, PaletteView};
 pub use prompt::{PromptKind, PromptView};

@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.104"
 arboard = { version = "3.6.1", default-features = false }
+crc-agent = { version = "0.1.0", path = "../crc-agent" }
 crc-config = { path = "../crc-config" }
 crc-core = { path = "../crc-core" }
 crc-editor = { path = "../crc-editor" }

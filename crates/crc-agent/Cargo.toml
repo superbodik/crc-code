@@ -1,0 +1,12 @@
+[package]
+name = "crc-agent"
+description = "Claude Code inside CRC Code: the CLI as a conversation."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = "1"
+serde_json.workspace = true
+tracing.workspace = true

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crc_theme::Highlight;
 
 use crate::view::controls::WindowControl;
+use crate::view::agent::AgentView;
 use crate::view::menu::MenuView;
 use crate::view::palette::PaletteView;
 use crate::view::prompt::PromptView;
@@ -114,6 +115,7 @@ pub struct EditorView {
     pub find: Option<FindView>,
     pub search: Option<SearchView>,
     pub panel: PanelView,
+    pub agent: Option<AgentView>,
     pub menu: Option<MenuView>,
     pub prompt: Option<PromptView>,
     pub menu_subject: Option<PathBuf>,

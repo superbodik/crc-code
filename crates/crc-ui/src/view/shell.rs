@@ -12,6 +12,7 @@ use crate::view::tabs;
 use crate::icon;
 use crate::view::find as find_view;
 use crate::view::hit;
+use crate::view::agent as agent_view;
 use crate::view::menu as menu_view;
 use crate::view::panel as panel_view;
 use crate::view::prompt as prompt_view;
@@ -41,7 +42,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     editor(&mut frame, layout, theme, view, metrics);
     minimap(&mut frame, layout, theme, view);
     panel(&mut frame, layout, theme, view, metrics);
-    aside(&mut frame, layout, theme);
+    aside(&mut frame, layout, theme, view);
     statusbar(&mut frame, layout, theme, view);
     find_bar(&mut frame, layout, theme, view);
     settings_panel(&mut frame, layout, theme, view);
@@ -718,12 +719,208 @@ fn panel(
     }
 }
 
-fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme) {
+fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
     let Some(aside) = layout.aside else { return };
     frame.quad(Quad::filled(aside, theme.chrome.panel));
     frame.quad(Quad::filled(
         Rect::new(aside.x, aside.y, 1.0, aside.height),
         theme.chrome.border,
+    ));
+
+    let Some(state) = view.agent.as_ref() else {
+        return;
+    };
+
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+    let scale = theme.scale;
+    let placed = agent_view::layout(aside, scale);
+
+    frame.text(TextRun::icon(
+        icon::ROBOT,
+        Rect::new(placed.header.x + 12.0, placed.header.y, 18.0, placed.header.height),
+        14.0,
+        theme.chrome.accent,
+    ));
+    frame.text(
+        TextRun::new(
+            "Claude Code",
+            Rect::new(
+                placed.header.x + 34.0,
+                placed.header.y,
+                placed.header.width - 70.0,
+                placed.header.height,
+            ),
+            type_scale.small,
+            theme.chrome.text_strong,
+        )
+        .weight(Weight::Semibold)
+        .line_height(placed.header.height),
+    );
+    frame.text(TextRun::icon(
+        icon::CLOSE,
+        placed.close,
+        11.0,
+        if state.hovered == Some(agent_view::Target::Close) {
+            theme.chrome.text_strong
+        } else {
+            theme.chrome.text_faint
+        },
+    ));
+    hairline_bottom(frame, placed.header, theme.chrome.border);
+
+    let line = metrics.row_height * 0.82;
+    let columns = ((placed.transcript.width - 40.0) / (type_scale.small * 0.56)).max(8.0) as usize;
+
+    let mut rows: Vec<(crc_agent::Speaker, String)> = Vec::new();
+    for turn in &state.talk.turns {
+        for (index, piece) in agent_view::wrap(&turn.text, columns).into_iter().enumerate() {
+            rows.push((
+                turn.speaker,
+                if index == 0 {
+                    piece
+                } else {
+                    format!("\u{2007}{piece}")
+                },
+            ));
+        }
+        rows.push((turn.speaker, String::new()));
+    }
+
+    let fits = (placed.transcript.height / line).floor().max(1.0) as usize;
+    let start = rows.len().saturating_sub(fits);
+
+    if rows.is_empty() {
+        frame.text(
+            TextRun::new(
+                state.greeting(),
+                placed.transcript.inset_by(14.0, 14.0),
+                type_scale.small,
+                theme.chrome.text_faint,
+            )
+            .line_height(line),
+        );
+    }
+
+    for (offset, (speaker, text)) in rows[start..].iter().enumerate() {
+        if text.is_empty() {
+            continue;
+        }
+        let top = placed.transcript.y + offset as f32 * line;
+        if top + line > placed.transcript.bottom() {
+            break;
+        }
+
+        let tint = match speaker {
+            crc_agent::Speaker::You => theme.chrome.text_strong,
+            crc_agent::Speaker::Claude => theme.chrome.text,
+            crc_agent::Speaker::Tool => theme.chrome.text_faint,
+            crc_agent::Speaker::Editor => theme.chrome.danger,
+        };
+
+        if !text.starts_with('\u{2007}') {
+            frame.text(TextRun::icon(
+                agent_view::glyph(*speaker),
+                Rect::new(placed.transcript.x + 12.0, top, 14.0, line),
+                10.0,
+                tint,
+            ));
+        }
+
+        frame.text(
+            TextRun::new(
+                text.clone(),
+                Rect::new(
+                    placed.transcript.x + 30.0,
+                    top,
+                    placed.transcript.width - 42.0,
+                    line,
+                ),
+                type_scale.small,
+                tint,
+            )
+            .line_height(line),
+        );
+    }
+
+    frame.text(
+        TextRun::new(
+            state.status(),
+            placed.status,
+            type_scale.small,
+            if state.missing {
+                theme.chrome.danger
+            } else {
+                theme.chrome.text_faint
+            },
+        )
+        .line_height(placed.status.height),
+    );
+
+    frame.quad(
+        Quad::filled(placed.composer, theme.chrome.surface)
+            .rounded(metrics.corner_radius_small)
+            .bordered(
+                metrics.border_width,
+                if state.focused {
+                    theme.chrome.accent
+                } else {
+                    theme.chrome.border
+                },
+            ),
+    );
+
+    let empty = state.draft.is_empty();
+    let draft = agent_view::wrap(
+        if empty { "Спроси Claude" } else { &state.draft },
+        ((placed.composer.width - 46.0) / (type_scale.small * 0.56)).max(8.0) as usize,
+    );
+    for (index, piece) in draft.iter().take(3).enumerate() {
+        frame.text(
+            TextRun::new(
+                piece.clone(),
+                Rect::new(
+                    placed.composer.x + 10.0,
+                    placed.composer.y + 6.0 + index as f32 * line,
+                    placed.composer.width - 44.0,
+                    line,
+                ),
+                type_scale.small,
+                if empty {
+                    theme.chrome.text_faint
+                } else {
+                    theme.chrome.text_strong
+                },
+            )
+            .line_height(line),
+        );
+    }
+
+    let live = state.ready_to_send();
+    frame.quad(
+        Quad::filled(
+            placed.send,
+            if live {
+                theme.chrome.accent_solid
+            } else {
+                theme.chrome.selected
+            },
+        )
+        .rounded(metrics.corner_radius_small),
+    );
+    frame.text(TextRun::icon(
+        if state.talk.busy {
+            icon::CLOCK
+        } else {
+            icon::CHEVRON_RIGHT
+        },
+        placed.send,
+        11.0,
+        if live {
+            theme.chrome.text_on_accent
+        } else {
+            theme.chrome.text_faint
+        },
     ));
 }
 

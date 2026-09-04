@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/crc-config", "crates/crc-core", "crates/crc-editor", "crates/crc-text", "crates/crc-syntax", "crates/crc-theme", "crates/crc-app", "crates/crc-ui", "crates/crc-term"]
+members = ["crates/crc-config", "crates/crc-core", "crates/crc-editor", "crates/crc-text", "crates/crc-syntax", "crates/crc-theme", "crates/crc-app", "crates/crc-ui", "crates/crc-term", "crates/crc-agent"]
 
 [workspace.package]
 version = "0.1.0"

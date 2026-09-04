@@ -8,8 +8,8 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    find as find_view, menu as menu_view, palette, panel as panel_view, prompt as prompt_view,
-    rail, search as search_view, settings as settings_view, tabs, welcome,
+    agent as agent_view, find as find_view, menu as menu_view, palette, panel as panel_view,
+    prompt as prompt_view, rail, search as search_view, settings as settings_view, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -43,6 +43,7 @@ pub struct App {
     smoke: bool,
     clipboard: Option<arboard::Clipboard>,
     terminal: Option<crc_term::Terminal>,
+    agent: Option<crc_agent::Agent>,
     shell_tried: bool,
     shell_seen: u64,
 }
@@ -98,6 +99,7 @@ impl App {
             smoke,
             clipboard: None,
             terminal: None,
+            agent: None,
             shell_tried: false,
             shell_seen: 0,
         }
@@ -185,6 +187,8 @@ impl App {
             Command::OpenFile => self.pick_file(),
             Command::ShowWelcome => self.show_welcome(),
             Command::OpenSettings => self.toggle_settings(),
+            Command::ToggleAgent => self.toggle_agent(),
+            Command::AskAgent => self.ask_about_selection(),
             Command::Find => self.open_find(),
             Command::SearchProject => self.toggle_search(),
             Command::FindStep { forward } => self.step_match(forward),
@@ -503,6 +507,13 @@ impl App {
             None => {}
         }
 
+        if let Some(aside) = layout.aside
+            && aside.contains(x, y)
+        {
+            self.agent_press(aside, x, y);
+            return;
+        }
+
         if let Some(bottom) = layout.panel
             && bottom.contains(x, y)
         {
@@ -638,6 +649,14 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.pull_agent();
+
+        if self.session.view.agent.is_some() && self.agent.is_some() {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                Instant::now() + Duration::from_millis(60),
+            ));
+        }
+
         if self.session.view.panel.shows_a_shell() && !self.shell_tried && !self.smoke {
             self.wake_shell();
         }
@@ -2151,6 +2170,9 @@ impl App {
     }
 
     fn taken_by_an_overlay(&mut self, key: &Key, physical: PhysicalKey) -> bool {
+        if self.agent_key(key, physical) {
+            return true;
+        }
         if self.shell_key(key, physical) {
             return true;
         }
@@ -2212,6 +2234,209 @@ impl App {
     }
 }
 
+
+impl App {
+    fn toggle_agent(&mut self) {
+        if self.session.view.agent.is_some() {
+            self.session.view.agent = None;
+            self.state.aside_open = false;
+            if let Some(agent) = self.agent.as_mut() {
+                agent.stop();
+            }
+            self.agent = None;
+            self.store();
+            self.request_redraw();
+            return;
+        }
+
+        self.state.aside_open = true;
+        let missing = !crc_agent::installed();
+
+        self.session.view.agent = Some(agent_view::AgentView {
+            missing,
+            focused: true,
+            ..agent_view::AgentView::default()
+        });
+
+        if !missing {
+            match crc_agent::Agent::start(self.session.root(), None) {
+                Ok(agent) => self.agent = Some(agent),
+                Err(error) => {
+                    tracing::warn!("no agent: {error}");
+                    if let Some(state) = self.session.view.agent.as_mut() {
+                        state.talk.take(crc_agent::Event::Trouble(format!("{error}")));
+                    }
+                }
+            }
+        }
+
+        self.store();
+        self.request_redraw();
+    }
+
+    fn ask_about_selection(&mut self) {
+        if self.session.view.agent.is_none() {
+            self.toggle_agent();
+        }
+
+        let quoted = self
+            .session
+            .document()
+            .and_then(|document| document.selected_text())
+            .filter(|text| !text.trim().is_empty());
+
+        let Some(quoted) = quoted else {
+            self.request_redraw();
+            return;
+        };
+
+        let where_from = self
+            .session
+            .view
+            .tabs
+            .iter()
+            .find(|tab| tab.active)
+            .map(|tab| tab.name.clone())
+            .unwrap_or_else(|| "файл".to_string());
+
+        if let Some(state) = self.session.view.agent.as_mut() {
+            state.draft = format!("{where_from}:\n{quoted}\n\n");
+            state.focused = true;
+        }
+        self.request_redraw();
+    }
+
+    fn send_to_agent(&mut self) {
+        let Some(state) = self.session.view.agent.as_ref() else {
+            return;
+        };
+        if !state.ready_to_send() {
+            return;
+        }
+
+        let text = state.draft.trim().to_string();
+        let Some(agent) = self.agent.as_mut() else {
+            return;
+        };
+
+        if let Err(error) = agent.say(&text) {
+            if let Some(state) = self.session.view.agent.as_mut() {
+                state.talk.take(crc_agent::Event::Trouble(format!("{error}")));
+            }
+            self.request_redraw();
+            return;
+        }
+
+        if let Some(state) = self.session.view.agent.as_mut() {
+            state.talk.asked(text);
+            state.draft.clear();
+        }
+        self.request_redraw();
+    }
+
+    fn pull_agent(&mut self) {
+        let Some(agent) = self.agent.as_mut() else {
+            return;
+        };
+        let events = agent.drain();
+        if events.is_empty() {
+            return;
+        }
+
+        if let Some(state) = self.session.view.agent.as_mut() {
+            for event in events {
+                state.talk.take(event);
+            }
+        }
+        self.request_redraw();
+    }
+
+    fn agent_press(&mut self, aside: Rect, x: f32, y: f32) {
+        let placed = agent_view::layout(aside, self.theme.scale);
+
+        match agent_view::target_at(&placed, x, y) {
+            Some(agent_view::Target::Close) => self.toggle_agent(),
+            Some(agent_view::Target::Send) => {
+                self.send_to_agent();
+            }
+            Some(agent_view::Target::Composer) | None => {
+                if let Some(state) = self.session.view.agent.as_mut() {
+                    state.focused = true;
+                }
+                self.request_redraw();
+            }
+            Some(agent_view::Target::Stop) => {}
+        }
+    }
+
+    fn agent_key(&mut self, key: &Key, physical: PhysicalKey) -> bool {
+        let focused = self
+            .session
+            .view
+            .agent
+            .as_ref()
+            .is_some_and(|state| state.focused);
+
+        if !focused
+            || self.session.view.prompt.is_some()
+            || self.session.view.menu.is_some()
+            || self.session.view.settings.is_some()
+            || self.session.view.palette.is_some()
+        {
+            return false;
+        }
+
+        if let Some(chord) = crate::input::chord(key, physical, self.modifiers)
+            && chord.ctrl
+        {
+            return false;
+        }
+
+        match key {
+            Key::Named(NamedKey::Escape) => {
+                if let Some(state) = self.session.view.agent.as_mut() {
+                    state.focused = false;
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Named(NamedKey::Enter) if !self.modifiers.shift_key() => {
+                self.send_to_agent();
+                true
+            }
+            Key::Named(NamedKey::Enter) => {
+                if let Some(state) = self.session.view.agent.as_mut() {
+                    state.draft.push('\n');
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(state) = self.session.view.agent.as_mut() {
+                    state.draft.pop();
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Named(NamedKey::Space) => {
+                if let Some(state) = self.session.view.agent.as_mut() {
+                    state.draft.push(' ');
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Character(text) if !self.modifiers.alt_key() => {
+                if let Some(state) = self.session.view.agent.as_mut() {
+                    state.draft.push_str(text);
+                }
+                self.request_redraw();
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 fn actions(keymap: &Keymap) -> Vec<Action> {
     let hint = |id: &str| keymap.hint(id).unwrap_or_default();
     vec![
@@ -2219,6 +2444,8 @@ fn actions(keymap: &Keymap) -> Vec<Action> {
         Action::new("open-file", "Открыть файл", "Файл").hint(hint("open-file")),
         Action::new("find", "Найти в файле", "Правка").hint(hint("find")),
         Action::new("search", "Найти по проекту", "Правка").hint(hint("search")),
+        Action::new("agent", "Claude Code: панель агента", "Агент").hint(hint("agent")),
+        Action::new("ask", "Спросить Claude о выделенном", "Агент").hint(hint("ask")),
         Action::new("settings", "Настройки", "Вид").hint(hint("settings")),
         Action::new("copy", "Копировать", "Правка").hint(hint("copy")),
         Action::new("cut", "Вырезать", "Правка").hint(hint("cut")),
