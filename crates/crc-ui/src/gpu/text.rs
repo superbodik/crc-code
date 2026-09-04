@@ -156,9 +156,9 @@ pub struct TextLayer {
 impl TextLayer {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         let mut font_system = FontSystem::new();
-        font_system
-            .db_mut()
-            .load_font_data(crate::icon::DATA.to_vec());
+        for face in crate::font::all() {
+            font_system.db_mut().load_font_data(face.to_vec());
+        }
         let cache = Cache::new(device);
         let viewport = Viewport::new(device, &cache);
         let mut atlas = TextAtlas::new(device, queue, &cache, format);

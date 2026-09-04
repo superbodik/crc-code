@@ -1,7 +1,5 @@
 pub const FAMILY: &str = "CRC Icons";
 
-pub const DATA: &[u8] = include_bytes!("../assets/crc-icons.ttf");
-
 pub const FOLDER: char = '\u{f3d9}';
 pub const FOLDER_OPEN: char = '\u{f3d8}';
 pub const FILE: char = '\u{f392}';
