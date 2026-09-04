@@ -19,3 +19,4 @@ bytemuck = "1.25.2"
 pollster = "1.0.1"
 crc-term = { version = "0.1.0", path = "../crc-term" }
 crc-agent = { version = "0.1.0", path = "../crc-agent" }
+serde_json.workspace = true

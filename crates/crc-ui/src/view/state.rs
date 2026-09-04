@@ -12,6 +12,7 @@ use crate::view::panel::PanelView;
 use crate::view::find::FindView;
 use crate::view::hit::ExplorerButton;
 use crate::view::rail::RailAction;
+use crate::view::review::ReviewView;
 use crate::view::search::SearchView;
 use crate::view::settings::SettingsView;
 use crate::view::welcome::WelcomeView;
@@ -116,6 +117,7 @@ pub struct EditorView {
     pub search: Option<SearchView>,
     pub panel: PanelView,
     pub agent: Option<AgentView>,
+    pub review: Option<ReviewView>,
     pub menu: Option<MenuView>,
     pub prompt: Option<PromptView>,
     pub menu_subject: Option<PathBuf>,

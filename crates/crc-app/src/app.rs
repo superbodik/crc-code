@@ -44,6 +44,8 @@ pub struct App {
     clipboard: Option<arboard::Clipboard>,
     terminal: Option<crc_term::Terminal>,
     agent: Option<crc_agent::Agent>,
+    warden: Option<crc_agent::Warden>,
+    asking: Option<crc_agent::Request>,
     shell_tried: bool,
     shell_seen: u64,
 }
@@ -100,6 +102,8 @@ impl App {
             clipboard: None,
             terminal: None,
             agent: None,
+            warden: None,
+            asking: None,
             shell_tried: false,
             shell_seen: 0,
         }
@@ -399,6 +403,10 @@ impl App {
         let (x, y) = self.cursor;
         let layout = self.layout();
 
+        if self.session.view.review.is_some() && self.review_press(x, y) {
+            return;
+        }
+
         if self.session.view.prompt.is_some() && self.prompt_press(x, y) {
             return;
         }
@@ -650,6 +658,7 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.pull_agent();
+        self.pull_warden();
         self.note_the_open_file();
 
         if self.session.view.agent.is_some() && self.agent.is_some() {
@@ -2178,6 +2187,9 @@ impl App {
     }
 
     fn taken_by_an_overlay(&mut self, key: &Key, physical: PhysicalKey) -> bool {
+        if self.review_key(key) {
+            return true;
+        }
         if self.agent_key(key, physical) {
             return true;
         }
@@ -2267,7 +2279,9 @@ impl App {
         });
 
         if !missing {
-            match crc_agent::Agent::start(self.session.root(), None) {
+            let guard = self.post_a_warden();
+
+            match crc_agent::Agent::start(self.session.root(), None, guard.as_deref()) {
                 Ok(agent) => self.agent = Some(agent),
                 Err(error) => {
                     tracing::warn!("no agent: {error}");
@@ -2345,6 +2359,131 @@ impl App {
             state.talk.asked(text);
             state.draft.clear();
             state.scroll = 0;
+        }
+        self.request_redraw();
+    }
+
+    fn post_a_warden(&mut self) -> Option<PathBuf> {
+        let warden = match crc_agent::Warden::listen() {
+            Ok(warden) => warden,
+            Err(error) => {
+                tracing::warn!("no permission warden: {error}");
+                return None;
+            }
+        };
+
+        let Ok(here) = std::env::current_exe() else {
+            return None;
+        };
+
+        let config = crc_agent::permission::config(&here.to_string_lossy(), warden.port());
+        let path = std::env::temp_dir().join(format!("crc-permission-{}.json", warden.port()));
+
+        if let Err(error) = std::fs::write(&path, config) {
+            tracing::warn!("could not write the permission config: {error}");
+            return None;
+        }
+
+        self.warden = Some(warden);
+        Some(path)
+    }
+
+    fn pull_warden(&mut self) {
+        if self.asking.is_some() {
+            return;
+        }
+        let Some(warden) = self.warden.as_ref() else {
+            return;
+        };
+        let Some(request) = warden.waiting() else {
+            return;
+        };
+
+        self.session.view.review = Some(crc_ui::view::review::ReviewView {
+            tool: request.tool.clone(),
+            file: request.file(),
+            detail: crc_ui::view::review::describe(&request.input),
+            hovered: None,
+        });
+        self.asking = Some(request);
+        self.request_redraw();
+    }
+
+    fn settle_review(&mut self, allow: bool) {
+        let Some(request) = self.asking.take() else {
+            return;
+        };
+        self.session.view.review = None;
+
+        if let Some(warden) = self.warden.as_ref() {
+            warden.answer(
+                request.id,
+                if allow {
+                    crc_agent::Verdict::Allow
+                } else {
+                    crc_agent::Verdict::Deny("человек отклонил правку".to_string())
+                },
+            );
+        }
+
+        if let Some(state) = self.session.view.agent.as_mut() {
+            state.talk.turns.push(crc_agent::talk::Turn::new(
+                if allow {
+                    crc_agent::Speaker::Note
+                } else {
+                    crc_agent::Speaker::Editor
+                },
+                if allow {
+                    format!("разрешено: {}", request.summary())
+                } else {
+                    format!("отклонено: {}", request.summary())
+                },
+            ));
+        }
+        self.request_redraw();
+    }
+
+    fn review_press(&mut self, x: f32, y: f32) -> bool {
+        let Some(state) = self.session.view.review.as_ref() else {
+            return false;
+        };
+        let placed = crc_ui::view::review::layout(self.layout().window, state, self.theme.scale);
+
+        match crc_ui::view::review::target_at(&placed, x, y) {
+            Some(crc_ui::view::review::Target::Allow) => self.settle_review(true),
+            Some(crc_ui::view::review::Target::Deny) => self.settle_review(false),
+            None => {}
+        }
+        true
+    }
+
+    fn review_key(&mut self, key: &Key) -> bool {
+        if self.session.view.review.is_none() {
+            return false;
+        }
+
+        match key {
+            Key::Named(NamedKey::Enter) => self.settle_review(true),
+            Key::Named(NamedKey::Escape) => self.settle_review(false),
+            _ => {}
+        }
+        true
+    }
+
+    fn paste_into_the_composer(&mut self) {
+        let Some(clipboard) = self.clipboard() else {
+            return;
+        };
+        let Ok(text) = clipboard.get_text() else {
+            return;
+        };
+        if text.is_empty() {
+            return;
+        }
+
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        if let Some(state) = self.session.view.agent.as_mut() {
+            state.draft.push_str(&text);
         }
         self.request_redraw();
     }
@@ -2451,6 +2590,10 @@ impl App {
         if let Some(chord) = crate::input::chord(key, physical, self.modifiers)
             && chord.ctrl
         {
+            if matches!(chord.key, crc_config::Key::Char('v')) && !chord.shift {
+                self.paste_into_the_composer();
+                return true;
+            }
             return false;
         }
 

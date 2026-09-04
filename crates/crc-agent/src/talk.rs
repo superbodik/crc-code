@@ -18,6 +18,7 @@ pub enum Speaker {
     Claude,
     Tool,
     Editor,
+    Note,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

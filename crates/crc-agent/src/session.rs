@@ -45,7 +45,7 @@ pub fn locate() -> Option<PathBuf> {
     None
 }
 
-fn launcher(model: Option<&str>) -> Option<Command> {
+fn launcher(model: Option<&str>, warden: Option<&Path>) -> Option<Command> {
     let found = locate()?;
 
     let mut command = if needs_a_shell(&found) {
@@ -56,11 +56,11 @@ fn launcher(model: Option<&str>) -> Option<Command> {
         Command::new(&found)
     };
 
-    command.args(arguments(model));
+    command.args(arguments(model, warden));
     Some(command)
 }
 
-pub fn arguments(model: Option<&str>) -> Vec<String> {
+pub fn arguments(model: Option<&str>, warden: Option<&Path>) -> Vec<String> {
     let mut flags = vec![
         "-p".to_string(),
         "--input-format".to_string(),
@@ -73,6 +73,13 @@ pub fn arguments(model: Option<&str>) -> Vec<String> {
     if let Some(model) = model {
         flags.push("--model".to_string());
         flags.push(model.to_string());
+    }
+
+    if let Some(config) = warden {
+        flags.push("--mcp-config".to_string());
+        flags.push(config.to_string_lossy().into_owned());
+        flags.push("--permission-prompt-tool".to_string());
+        flags.push(crate::permission::tool_name());
     }
 
     flags
@@ -107,9 +114,9 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn start(root: &Path, model: Option<&str>) -> Result<Self> {
+    pub fn start(root: &Path, model: Option<&str>, warden: Option<&Path>) -> Result<Self> {
         let mut command =
-            launcher(model).with_context(|| format!("{PROGRAM} is not on the PATH"))?;
+            launcher(model, warden).with_context(|| format!("{PROGRAM} is not on the PATH"))?;
 
         let mut child = command
             .current_dir(root)

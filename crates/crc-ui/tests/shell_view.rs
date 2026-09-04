@@ -53,6 +53,7 @@ fn view() -> EditorView {
         search: None,
         panel: Default::default(),
         agent: None,
+        review: None,
         menu: None,
         prompt: None,
         menu_subject: None,

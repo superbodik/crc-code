@@ -28,7 +28,11 @@ impl AgentView {
     }
 
     pub fn context_note(&self) -> Option<String> {
-        self.context.as_ref().map(|file| format!("в работе: {file}"))
+        let file = self.context.as_ref()?;
+        if self.talk.busy || self.missing {
+            return None;
+        }
+        Some(format!("в работе: {file}"))
     }
 
     pub fn ready_to_send(&self) -> bool {
@@ -64,6 +68,7 @@ pub fn glyph(speaker: Speaker) -> char {
         Speaker::Claude => icon::ROBOT,
         Speaker::Tool => icon::TERMINAL,
         Speaker::Editor => icon::WARNING,
+        Speaker::Note => icon::CHECK,
     }
 }
 

@@ -9,6 +9,7 @@ pub mod palette;
 pub mod panel;
 pub mod prompt;
 pub mod rail;
+pub mod review;
 pub mod search;
 pub mod selection;
 pub mod settings;
@@ -24,6 +25,7 @@ pub use hit::{
     explorer_row,
 };
 pub use rail::RailAction;
+pub use review::ReviewView;
 pub use search::{SearchRow, SearchView};
 pub use logo::{Mark, clear_space, mark};
 pub use find::FindView;

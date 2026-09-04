@@ -29,12 +29,24 @@ fn main() -> anyhow::Result<()> {
 
     let mut smoke = false;
     let mut root = PathBuf::from(".");
+    let mut relay: Option<u16> = None;
+    let mut expecting_port = false;
+
     for argument in std::env::args().skip(1) {
-        if argument == "--smoke" {
+        if expecting_port {
+            relay = argument.parse().ok();
+            expecting_port = false;
+        } else if argument == "--smoke" {
             smoke = true;
+        } else if argument == "--permission-relay" {
+            expecting_port = true;
         } else {
             root = PathBuf::from(argument);
         }
+    }
+
+    if let Some(port) = relay {
+        return crc_agent::permission::relay(port);
     }
 
     let session = Session::open(&root)?;

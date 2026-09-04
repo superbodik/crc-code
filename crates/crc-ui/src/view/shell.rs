@@ -17,6 +17,7 @@ use crate::view::menu as menu_view;
 use crate::view::panel as panel_view;
 use crate::view::prompt as prompt_view;
 use crate::view::rail as rail_view;
+use crate::view::review as review_view;
 use crate::view::search as search_view;
 use crate::view::settings as settings_view;
 use crate::view::welcome;
@@ -49,6 +50,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     command_palette(&mut frame, layout, theme, view);
     context_menu(&mut frame, layout, theme, view);
     name_prompt(&mut frame, layout, theme, view);
+    review_panel(&mut frame, layout, theme, view);
 
     frame
 }
@@ -817,6 +819,7 @@ fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
             crc_agent::Speaker::Claude => theme.chrome.text,
             crc_agent::Speaker::Tool => theme.chrome.text_faint,
             crc_agent::Speaker::Editor => theme.chrome.danger,
+            crc_agent::Speaker::Note => theme.chrome.text_muted,
         };
 
         if !text.starts_with('\u{2007}') {
@@ -2286,4 +2289,111 @@ fn paint(
         return None;
     }
     Some(colour)
+}
+
+fn review_panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.review.as_ref() else {
+        return;
+    };
+
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+    let placed = review_view::layout(layout.window, state, theme.scale);
+
+    frame.overlay_quad(Quad::filled(
+        layout.window,
+        theme.chrome.backdrop.with_alpha(170),
+    ));
+    frame.overlay_quad(
+        Quad::filled(placed.panel, theme.chrome.raised)
+            .rounded(metrics.corner_radius)
+            .bordered(metrics.border_width, theme.chrome.accent),
+    );
+
+    frame.overlay_text(
+        TextRun::new(
+            state.title(),
+            placed.title,
+            type_scale.large,
+            theme.chrome.text_strong,
+        )
+        .weight(Weight::Semibold)
+        .line_height(placed.title.height),
+    );
+    frame.overlay_text(
+        TextRun::new(
+            state.subject(),
+            placed.subject,
+            type_scale.small,
+            theme.chrome.text_faint,
+        )
+        .mono()
+        .line_height(placed.subject.height),
+    );
+
+    for (index, rect) in placed.rows.iter().enumerate() {
+        let Some(line) = state.detail.get(index) else {
+            break;
+        };
+
+        let heading = !line.starts_with("  ");
+        frame.overlay_text(
+            TextRun::new(
+                line.clone(),
+                *rect,
+                type_scale.small,
+                if heading {
+                    theme.chrome.text_muted
+                } else {
+                    theme.chrome.text
+                },
+            )
+            .mono()
+            .line_height(rect.height),
+        );
+    }
+
+    for (target, rect) in [
+        (review_view::Target::Deny, placed.deny),
+        (review_view::Target::Allow, placed.allow),
+    ] {
+        let allowing = target == review_view::Target::Allow;
+        let hovered = state.hovered == Some(target);
+
+        let fill = if allowing {
+            if hovered {
+                theme.chrome.accent_hover
+            } else {
+                theme.chrome.accent_solid
+            }
+        } else if hovered {
+            theme.chrome.hover
+        } else {
+            theme.chrome.panel
+        };
+
+        frame.overlay_quad(
+            Quad::filled(rect, fill)
+                .rounded(metrics.corner_radius_small)
+                .bordered(metrics.border_width, theme.chrome.border),
+        );
+        frame.overlay_text(
+            TextRun::new(
+                if allowing {
+                    "Разрешить · Enter"
+                } else {
+                    "Отклонить · Esc"
+                },
+                rect,
+                type_scale.small,
+                if allowing {
+                    theme.chrome.text_on_accent
+                } else {
+                    theme.chrome.text
+                },
+            )
+            .align(TextAlign::Center)
+            .line_height(rect.height),
+        );
+    }
 }

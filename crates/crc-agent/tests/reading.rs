@@ -197,7 +197,7 @@ mod speaking {
 
     #[test]
     fn the_flags_ask_for_a_stream_in_both_directions() {
-        let flags = arguments(None);
+        let flags = arguments(None, None);
 
         assert!(flags.contains(&"-p".to_string()));
         assert!(flags.windows(2).any(|pair| pair
@@ -209,7 +209,7 @@ mod speaking {
 
     #[test]
     fn a_chosen_model_is_passed_through() {
-        let flags = arguments(Some("claude-haiku-4-5-20251001"));
+        let flags = arguments(Some("claude-haiku-4-5-20251001"), None);
 
         assert!(flags.windows(2).any(|pair| pair
             == [
