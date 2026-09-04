@@ -59,6 +59,9 @@ mod counting {
     #[test]
     fn an_empty_tab_explains_itself_in_its_own_words() {
         let mut state = PanelView::default();
+        assert_eq!(state.empty_note(), "Оболочка не запущена");
+
+        state.tab = PanelTab::Problems;
         assert_eq!(state.empty_note(), "Разбор проходит без ошибок");
 
         state.tab = PanelTab::Output;
@@ -88,9 +91,18 @@ mod placing {
         let empty = placed(&PanelView::default());
         let full = placed(&view());
 
+        let problems = PanelTab::ALL
+            .iter()
+            .position(|tab| *tab == PanelTab::Problems)
+            .unwrap();
+
         assert!(
-            full.tabs[0].width > empty.tabs[0].width,
+            full.tabs[problems].width > empty.tabs[problems].width,
             "the badge should make room for itself"
+        );
+        assert_eq!(
+            full.tabs[0].width, empty.tabs[0].width,
+            "the terminal never wears a badge, so its width never moves"
         );
     }
 
@@ -190,6 +202,61 @@ mod clicking {
         assert_eq!(
             panel::target_at(&layout, &state, layout.header.right() - 20.0, layout.header.y + 8.0),
             None
+        );
+    }
+}
+
+mod the_shell_tab {
+    use super::*;
+
+    #[test]
+    fn the_terminal_leads_the_strip() {
+        assert_eq!(PanelTab::ALL[0], PanelTab::Terminal);
+        assert_eq!(PanelTab::default(), PanelTab::Terminal);
+    }
+
+    #[test]
+    fn only_the_terminal_tab_shows_a_shell() {
+        let mut state = view();
+
+        state.tab = PanelTab::Terminal;
+        assert!(state.shows_a_shell());
+
+        state.tab = PanelTab::Problems;
+        assert!(!state.shows_a_shell());
+
+        state.tab = PanelTab::Output;
+        assert!(!state.shows_a_shell());
+    }
+
+    #[test]
+    fn the_terminal_carries_no_row_count_of_its_own() {
+        let mut state = view();
+        state.tab = PanelTab::Terminal;
+
+        assert_eq!(state.rows(), 0, "the shell is not a list of rows");
+        assert_eq!(state.count(PanelTab::Terminal), 0, "and wears no badge");
+    }
+
+    #[test]
+    fn a_shell_that_never_started_says_so() {
+        let mut state = view();
+        state.tab = PanelTab::Terminal;
+
+        assert_eq!(state.empty_note(), "Оболочка не запущена");
+    }
+
+    #[test]
+    fn a_click_on_a_tab_is_never_a_click_into_the_shell() {
+        let mut state = view();
+        state.tab = PanelTab::Terminal;
+        let layout = placed(&state);
+
+        let tab = layout.tabs[1];
+        assert_eq!(
+            panel::target_at(&layout, &state, tab.x + 4.0, tab.y + 4.0),
+            Some(Target::Tab(1)),
+            "the strip stays reachable while a shell is running"
         );
     }
 }

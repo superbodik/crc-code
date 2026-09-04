@@ -21,6 +21,7 @@ crc-config = { path = "../crc-config" }
 crc-core = { path = "../crc-core" }
 crc-editor = { path = "../crc-editor" }
 crc-syntax = { path = "../crc-syntax" }
+crc-term = { version = "0.1.0", path = "../crc-term" }
 crc-text = { path = "../crc-text" }
 crc-theme = { path = "../crc-theme" }
 crc-ui = { path = "../crc-ui" }

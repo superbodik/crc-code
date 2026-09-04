@@ -6,15 +6,17 @@ use crate::icon;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PanelTab {
     #[default]
+    Terminal,
     Problems,
     Output,
 }
 
 impl PanelTab {
-    pub const ALL: [PanelTab; 2] = [PanelTab::Problems, PanelTab::Output];
+    pub const ALL: [PanelTab; 3] = [PanelTab::Terminal, PanelTab::Problems, PanelTab::Output];
 
     pub const fn title(self) -> &'static str {
         match self {
+            PanelTab::Terminal => "Терминал",
             PanelTab::Problems => "Проблемы",
             PanelTab::Output => "Вывод",
         }
@@ -22,6 +24,7 @@ impl PanelTab {
 
     pub const fn glyph(self) -> char {
         match self {
+            PanelTab::Terminal => icon::TERMINAL,
             PanelTab::Problems => icon::PROBLEMS,
             PanelTab::Output => icon::OUTPUT,
         }
@@ -44,11 +47,14 @@ pub struct PanelView {
     pub scroll: usize,
     pub hovered: Option<usize>,
     pub selected: Option<usize>,
+    pub screen: Option<crc_term::Screen>,
+    pub focused: bool,
 }
 
 impl PanelView {
     pub fn rows(&self) -> usize {
         match self.tab {
+            PanelTab::Terminal => 0,
             PanelTab::Problems => self.problems.len(),
             PanelTab::Output => self.output.len(),
         }
@@ -56,6 +62,7 @@ impl PanelView {
 
     pub fn count(&self, tab: PanelTab) -> usize {
         match tab {
+            PanelTab::Terminal => 0,
             PanelTab::Problems => self.problems.len(),
             PanelTab::Output => self.output.len(),
         }
@@ -63,9 +70,14 @@ impl PanelView {
 
     pub fn empty_note(&self) -> &'static str {
         match self.tab {
+            PanelTab::Terminal => "Оболочка не запущена",
             PanelTab::Problems => "Разбор проходит без ошибок",
             PanelTab::Output => "Пока нечего показать",
         }
+    }
+
+    pub fn shows_a_shell(&self) -> bool {
+        self.tab == PanelTab::Terminal
     }
 }
 

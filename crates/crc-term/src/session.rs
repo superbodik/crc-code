@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
@@ -47,6 +47,7 @@ pub struct Terminal {
     writer: Arc<Mutex<Ink0>>,
     parser: Arc<Mutex<vt100::Parser>>,
     alive: Arc<AtomicBool>,
+    revision: Arc<AtomicU64>,
     rows: u16,
     columns: u16,
 }
@@ -91,10 +92,12 @@ impl Terminal {
 
         let parser = Arc::new(Mutex::new(vt100::Parser::new(rows, columns, 4000)));
         let alive = Arc::new(AtomicBool::new(true));
+        let revision = Arc::new(AtomicU64::new(0));
 
         let feed = Arc::clone(&parser);
         let running = Arc::clone(&alive);
         let answer = Arc::clone(&writer);
+        let counter = Arc::clone(&revision);
 
         std::thread::Builder::new()
             .name("crc-term-reader".to_string())
@@ -111,9 +114,13 @@ impl Terminal {
                                 parser.process(chunk);
                             }
 
+                            counter.fetch_add(1, Ordering::Relaxed);
+
                             tail.extend_from_slice(chunk);
-                            if tail.len() > 64 {
-                                let cut = tail.len() - 64;
+                            let (asked, consumed) = answers(&tail);
+                            tail.drain(0..consumed);
+                            if tail.len() > 32 {
+                                let cut = tail.len() - 32;
                                 tail.drain(0..cut);
                             }
 
@@ -122,7 +129,7 @@ impl Terminal {
                                 .map(|parser| parser.screen().cursor_position())
                                 .unwrap_or((0, 0));
 
-                            for reply in answers(&tail) {
+                            for reply in asked {
                                 let bytes = match reply {
                                     Query::CursorPosition => {
                                         format!("\x1b[{};{}R", cursor.0 + 1, cursor.1 + 1)
@@ -160,6 +167,7 @@ impl Terminal {
             writer,
             parser,
             alive,
+            revision,
             rows,
             columns,
         })
@@ -167,6 +175,10 @@ impl Terminal {
 
     pub fn is_alive(&self) -> bool {
         self.alive.load(Ordering::Relaxed)
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Relaxed)
     }
 
     pub fn size(&self) -> (u16, u16) {
@@ -256,13 +268,24 @@ pub enum Query {
     DeviceAttributes,
 }
 
-pub fn answers(bytes: &[u8]) -> Vec<Query> {
+pub fn answers(bytes: &[u8]) -> (Vec<Query>, usize) {
     let mut asked = Vec::new();
     let mut at = 0;
+    let mut consumed = 0;
 
-    while at + 2 < bytes.len() {
-        if bytes[at] != 0x1b || bytes[at + 1] != b'[' {
+    while at < bytes.len() {
+        if bytes[at] != 0x1b {
             at += 1;
+            consumed = at;
+            continue;
+        }
+
+        if at + 1 >= bytes.len() {
+            break;
+        }
+        if bytes[at + 1] != b'[' {
+            at += 2;
+            consumed = at;
             continue;
         }
 
@@ -280,9 +303,10 @@ pub fn answers(bytes: &[u8]) -> Vec<Query> {
             _ => {}
         }
         at = end + 1;
+        consumed = at;
     }
 
-    asked
+    (asked, consumed)
 }
 
 fn ink(colour: vt100::Color) -> Ink {

@@ -42,6 +42,9 @@ pub struct App {
     frames: u32,
     smoke: bool,
     clipboard: Option<arboard::Clipboard>,
+    terminal: Option<crc_term::Terminal>,
+    shell_tried: bool,
+    shell_seen: u64,
 }
 
 impl App {
@@ -94,6 +97,9 @@ impl App {
             frames: 0,
             smoke,
             clipboard: None,
+            terminal: None,
+            shell_tried: false,
+            shell_seen: 0,
         }
     }
 
@@ -504,6 +510,11 @@ impl App {
             return;
         }
 
+        if self.session.view.panel.focused {
+            self.session.view.panel.focused = false;
+            self.request_redraw();
+        }
+
         if let Some(rail_bar) = layout.rail
             && rail_bar.contains(x, y)
         {
@@ -627,6 +638,19 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.session.view.panel.shows_a_shell() && !self.shell_tried && !self.smoke {
+            self.wake_shell();
+        }
+
+        if self.session.view.panel.shows_a_shell() && self.terminal.is_some() {
+            self.pull_shell();
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                Instant::now() + Duration::from_millis(33),
+            ));
+        } else {
+            event_loop.set_control_flow(ControlFlow::Wait);
+        }
+
         let Some(last) = self.last_edit else {
             return;
         };
@@ -730,9 +754,7 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                if self.session.view.prompt.is_some()
-                    && self.prompt_key(&logical_key, physical_key)
-                {
+                if self.taken_by_an_overlay(&logical_key, physical_key) {
                 } else if self.session.view.menu.is_some()
                     && matches!(logical_key, Key::Named(NamedKey::Escape))
                 {
@@ -1743,12 +1765,22 @@ impl App {
         let glyph = self.theme.type_scale.small * 0.62;
         let placed = panel_view::layout(panel, &self.session.view.panel, &metrics, glyph);
 
+        if self.session.view.panel.shows_a_shell() && placed.body.contains(x, y) {
+            self.session.view.panel.focused = true;
+            self.request_redraw();
+            return;
+        }
+
         match panel_view::target_at(&placed, &self.session.view.panel, x, y) {
             Some(panel_view::Target::Tab(index)) => {
+                self.session.view.panel.focused = false;
                 if let Some(tab) = panel_view::PanelTab::ALL.get(index).copied() {
                     self.session.view.panel.tab = tab;
                     self.session.view.panel.scroll = 0;
                     self.session.view.panel.selected = None;
+                    if tab == panel_view::PanelTab::Terminal {
+                        self.wake_shell();
+                    }
                     self.request_redraw();
                 }
             }
@@ -2042,6 +2074,141 @@ impl App {
                 self.request_redraw();
             }
         }
+    }
+}
+
+
+impl App {
+    fn shell_box(&self) -> Option<(Rect, u16, u16)> {
+        let layout = self.layout();
+        let panel = layout.panel?;
+
+        let metrics = self.theme.metrics();
+        let glyph = self.theme.type_scale.small * 0.62;
+        let placed = panel_view::layout(panel, &self.session.view.panel, &metrics, glyph);
+
+        let columns = (placed.body.width / self.metrics.char_width.max(1.0)).floor();
+        let rows = (placed.body.height / self.metrics.line_height.max(1.0)).floor();
+
+        Some((
+            placed.body,
+            rows.clamp(1.0, 400.0) as u16,
+            columns.clamp(8.0, 600.0) as u16,
+        ))
+    }
+
+    fn wake_shell(&mut self) {
+        let Some((_, rows, columns)) = self.shell_box() else {
+            return;
+        };
+
+        if self
+            .terminal
+            .as_ref()
+            .is_some_and(|terminal| terminal.is_alive())
+        {
+            return;
+        }
+
+        self.shell_tried = true;
+        let shell = crc_term::Shell::preferred();
+        match crc_term::Terminal::spawn(&shell, self.session.root(), rows, columns) {
+            Ok(terminal) => {
+                self.session.say(format!("оболочка: {}", shell.program));
+                self.terminal = Some(terminal);
+            }
+            Err(error) => {
+                tracing::warn!("no shell: {error}");
+                self.session.say(format!("оболочку запустить не вышло: {error}"));
+                self.terminal = None;
+            }
+        }
+        self.pull_shell();
+    }
+
+    fn pull_shell(&mut self) {
+        if let Some((_, rows, columns)) = self.shell_box()
+            && let Some(terminal) = self.terminal.as_mut()
+        {
+            terminal.resize(rows, columns);
+        }
+
+        let Some(terminal) = self.terminal.as_ref() else {
+            if self.session.view.panel.screen.take().is_some() {
+                self.request_redraw();
+            }
+            return;
+        };
+
+        let revision = terminal.revision();
+        if revision == self.shell_seen && self.session.view.panel.screen.is_some() {
+            return;
+        }
+        self.shell_seen = revision;
+
+        self.session.view.panel.screen = Some(terminal.screen());
+        self.request_redraw();
+    }
+
+    fn taken_by_an_overlay(&mut self, key: &Key, physical: PhysicalKey) -> bool {
+        if self.shell_key(key, physical) {
+            return true;
+        }
+        self.session.view.prompt.is_some() && self.prompt_key(key, physical)
+    }
+
+    fn shell_key(&mut self, key: &Key, physical: PhysicalKey) -> bool {
+        if !self.session.view.panel.focused
+            || !self.session.view.panel.shows_a_shell()
+            || self.terminal.is_none()
+            || self.session.view.prompt.is_some()
+            || self.session.view.menu.is_some()
+            || self.session.view.settings.is_some()
+            || self.session.view.palette.is_some()
+        {
+            return false;
+        }
+
+        if let Some(chord) = crate::input::chord(key, physical, self.modifiers)
+            && chord.ctrl
+            && !chord.shift
+            && matches!(chord.key, crc_config::Key::Char('c'))
+        {
+            self.send_to_shell(b"\x03");
+            return true;
+        }
+
+        let bytes: Vec<u8> = match key {
+            Key::Named(NamedKey::Enter) => b"\r".to_vec(),
+            Key::Named(NamedKey::Backspace) => vec![0x7f],
+            Key::Named(NamedKey::Tab) => b"\t".to_vec(),
+            Key::Named(NamedKey::Escape) => b"\x1b".to_vec(),
+            Key::Named(NamedKey::ArrowUp) => b"\x1b[A".to_vec(),
+            Key::Named(NamedKey::ArrowDown) => b"\x1b[B".to_vec(),
+            Key::Named(NamedKey::ArrowRight) => b"\x1b[C".to_vec(),
+            Key::Named(NamedKey::ArrowLeft) => b"\x1b[D".to_vec(),
+            Key::Named(NamedKey::Home) => b"\x1b[H".to_vec(),
+            Key::Named(NamedKey::End) => b"\x1b[F".to_vec(),
+            Key::Named(NamedKey::Delete) => b"\x1b[3~".to_vec(),
+            Key::Named(NamedKey::PageUp) => b"\x1b[5~".to_vec(),
+            Key::Named(NamedKey::PageDown) => b"\x1b[6~".to_vec(),
+            Key::Named(NamedKey::Space) => b" ".to_vec(),
+            Key::Character(text) if !self.modifiers.control_key() && !self.modifiers.alt_key() => {
+                text.as_bytes().to_vec()
+            }
+            _ => return false,
+        };
+
+        self.send_to_shell(&bytes);
+        true
+    }
+
+    fn send_to_shell(&mut self, bytes: &[u8]) {
+        if let Some(terminal) = self.terminal.as_mut() {
+            terminal.send(bytes);
+        }
+        self.pull_shell();
+        self.request_redraw();
     }
 }
 

@@ -466,6 +466,7 @@ dependencies = [
  "crc-core",
  "crc-editor",
  "crc-syntax",
+ "crc-term",
  "crc-text",
  "crc-theme",
  "crc-ui",
@@ -564,6 +565,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "crc-syntax",
+ "crc-term",
  "crc-text",
  "crc-theme",
  "glyphon",

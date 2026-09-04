@@ -40,7 +40,7 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     breadcrumbs(&mut frame, layout, theme, view);
     editor(&mut frame, layout, theme, view, metrics);
     minimap(&mut frame, layout, theme, view);
-    panel(&mut frame, layout, theme, view);
+    panel(&mut frame, layout, theme, view, metrics);
     aside(&mut frame, layout, theme);
     statusbar(&mut frame, layout, theme, view);
     find_bar(&mut frame, layout, theme, view);
@@ -550,7 +550,13 @@ fn minimap(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
     }
 }
 
-fn panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+fn panel(
+    frame: &mut Frame,
+    layout: &Shell,
+    theme: &Theme,
+    view: &EditorView,
+    code: CodeMetrics,
+) {
     let Some(panel) = layout.panel else { return };
     let metrics = theme.metrics();
     let scale = theme.type_scale;
@@ -607,6 +613,11 @@ fn panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
         );
     }
 
+    if state.shows_a_shell() {
+        shell_screen(frame, placed.body, theme, state, code);
+        return;
+    }
+
     if state.rows() == 0 {
         frame.text(
             TextRun::new(
@@ -636,6 +647,7 @@ fn panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
         }
 
         match state.tab {
+            panel_view::PanelTab::Terminal => break,
             panel_view::PanelTab::Problems => {
                 let Some(problem) = state.problems.get(index) else {
                     break;
@@ -1938,4 +1950,129 @@ fn name_prompt(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorVi
             .line_height(rect.height),
         );
     }
+}
+
+fn shell_screen(
+    frame: &mut Frame,
+    body: Rect,
+    theme: &Theme,
+    state: &panel_view::PanelView,
+    code: CodeMetrics,
+) {
+    let palette = &theme.terminal;
+    frame.quad(Quad::filled(body, palette.background));
+
+    if state.focused {
+        frame.quad(Quad::filled(
+            Rect::new(body.x, body.y, 2.0, body.height),
+            theme.chrome.accent,
+        ));
+    }
+
+    let Some(screen) = state.screen.as_ref() else {
+        frame.text(
+            TextRun::new(
+                state.empty_note(),
+                body.inset_by(10.0, 8.0),
+                theme.type_scale.small,
+                theme.chrome.text_faint,
+            )
+            .mono()
+            .line_height(code.line_height),
+        );
+        return;
+    };
+
+    let width = code.char_width.max(1.0);
+    let height = code.line_height.max(1.0);
+
+    for (row, line) in screen.rows.iter().enumerate() {
+        let top = body.y + row as f32 * height;
+        if top + height > body.bottom() + 0.5 {
+            break;
+        }
+
+        for (column, cell) in line.cells.iter().enumerate() {
+            let back = paint(palette, cell.background, cell.inverse, true);
+            if let Some(colour) = back {
+                frame.quad(Quad::filled(
+                    Rect::new(body.x + column as f32 * width, top, width, height),
+                    colour,
+                ));
+            }
+        }
+
+        let text = line.text();
+        if text.trim().is_empty() {
+            continue;
+        }
+
+        let mut spans: Vec<Span> = Vec::new();
+        let mut at = 0usize;
+        for cell in &line.cells {
+            let len = cell.text.len();
+            let colour = paint(palette, cell.foreground, cell.inverse, false)
+                .unwrap_or(palette.foreground);
+
+            match spans.last_mut() {
+                Some(last) if last.color == colour => last.range.end = at + len,
+                _ => spans.push(Span::new(at..at + len, colour)),
+            }
+            at += len;
+        }
+
+        if spans.len() == 1 && spans[0].color == palette.foreground {
+            spans.clear();
+        }
+
+        frame.text(
+            TextRun::new(
+                text,
+                Rect::new(body.x, top, body.width, height),
+                theme.type_scale.code,
+                palette.foreground,
+            )
+            .mono()
+            .line_height(height)
+            .spans(spans),
+        );
+    }
+
+    if screen.cursor_visible && screen.alive {
+        let (row, column) = screen.cursor;
+        let caret = Rect::new(
+            body.x + column as f32 * width,
+            body.y + row as f32 * height,
+            2.0,
+            height,
+        );
+        if body.contains(caret.x, caret.y) {
+            frame.quad(Quad::filled(caret, palette.cursor));
+        }
+    }
+}
+
+fn paint(
+    palette: &crc_theme::TerminalTheme,
+    ink: crc_term::screen::Ink,
+    inverse: bool,
+    background: bool,
+) -> Option<crc_theme::Rgba> {
+    let wanted = if inverse { !background } else { background };
+
+    let colour = match ink {
+        crc_term::screen::Ink::Default => {
+            if wanted {
+                return inverse.then_some(palette.foreground);
+            }
+            palette.foreground
+        }
+        crc_term::screen::Ink::Indexed(index) => palette.colour(index),
+        crc_term::screen::Ink::Rgb(r, g, b) => crc_theme::Rgba::new(r, g, b, 255),
+    };
+
+    if wanted && matches!(ink, crc_term::screen::Ink::Default) && !inverse {
+        return None;
+    }
+    Some(colour)
 }
