@@ -5,6 +5,7 @@ pub mod density;
 pub mod diff;
 pub mod palette;
 pub mod syntax;
+pub mod terminal;
 pub mod theme;
 pub mod typography;
 
@@ -13,6 +14,7 @@ pub use chrome::{CONTROL_RING, Chrome};
 pub use color::Rgba;
 pub use density::{Affordances, Density, Metrics};
 pub use diff::DiffTheme;
+pub use terminal::TerminalTheme;
 pub use syntax::{Highlight, SyntaxTheme};
 pub use theme::{Appearance, Theme};
 pub use typography::{TypeScale, Weight};
