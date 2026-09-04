@@ -788,7 +788,8 @@ fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
     }
 
     let fits = (placed.transcript.height / line).floor().max(1.0) as usize;
-    let start = rows.len().saturating_sub(fits);
+    let hidden = rows.len().saturating_sub(fits);
+    let start = hidden.saturating_sub(state.scroll.min(hidden));
 
     if rows.is_empty() {
         frame.text(
@@ -845,7 +846,7 @@ fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
 
     frame.text(
         TextRun::new(
-            state.status(),
+            state.context_note().unwrap_or_else(|| state.status()),
             placed.status,
             type_scale.small,
             if state.missing {
@@ -896,11 +897,15 @@ fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
         );
     }
 
-    let live = state.ready_to_send();
+    let stopping = state.stoppable();
+    let live = state.ready_to_send() || stopping;
+
     frame.quad(
         Quad::filled(
             placed.send,
-            if live {
+            if stopping {
+                theme.chrome.danger
+            } else if live {
                 theme.chrome.accent_solid
             } else {
                 theme.chrome.selected
@@ -909,8 +914,8 @@ fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
         .rounded(metrics.corner_radius_small),
     );
     frame.text(TextRun::icon(
-        if state.talk.busy {
-            icon::CLOCK
+        if stopping {
+            icon::CLOSE
         } else {
             icon::CHEVRON_RIGHT
         },
@@ -922,6 +927,15 @@ fn aside(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
             theme.chrome.text_faint
         },
     ));
+
+    if state.talk.busy && !stopping {
+        frame.text(TextRun::icon(
+            icon::CLOCK,
+            placed.send,
+            11.0,
+            theme.chrome.text_faint,
+        ));
+    }
 }
 
 fn statusbar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {

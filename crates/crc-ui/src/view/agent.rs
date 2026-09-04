@@ -19,9 +19,18 @@ pub struct AgentView {
     pub scroll: usize,
     pub hovered: Option<Target>,
     pub missing: bool,
+    pub context: Option<String>,
 }
 
 impl AgentView {
+    pub fn stoppable(&self) -> bool {
+        self.talk.busy && !self.missing
+    }
+
+    pub fn context_note(&self) -> Option<String> {
+        self.context.as_ref().map(|file| format!("в работе: {file}"))
+    }
+
     pub fn ready_to_send(&self) -> bool {
         !self.draft.trim().is_empty() && !self.talk.busy && !self.missing
     }
@@ -123,12 +132,16 @@ pub fn layout(aside: Rect, scale: f32) -> Layout {
     }
 }
 
-pub fn target_at(layout: &Layout, x: f32, y: f32) -> Option<Target> {
+pub fn target_at(layout: &Layout, view: &AgentView, x: f32, y: f32) -> Option<Target> {
     if layout.close.contains(x, y) {
         return Some(Target::Close);
     }
     if layout.send.contains(x, y) {
-        return Some(Target::Send);
+        return Some(if view.stoppable() {
+            Target::Stop
+        } else {
+            Target::Send
+        });
     }
     if layout.composer.contains(x, y) {
         return Some(Target::Composer);

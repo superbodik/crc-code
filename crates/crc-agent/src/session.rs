@@ -78,6 +78,15 @@ pub fn arguments(model: Option<&str>) -> Vec<String> {
     flags
 }
 
+pub fn halt(request: u64) -> String {
+    let message = serde_json::json!({
+        "type": "control_request",
+        "request_id": format!("crc-{request}"),
+        "request": { "subtype": "interrupt" }
+    });
+    format!("{message}\n")
+}
+
 pub fn ask(text: &str) -> String {
     let message = serde_json::json!({
         "type": "user",
@@ -94,6 +103,7 @@ pub struct Agent {
     stdin: Option<ChildStdin>,
     events: Receiver<Event>,
     alive: Arc<AtomicBool>,
+    requests: u64,
 }
 
 impl Agent {
@@ -155,11 +165,24 @@ impl Agent {
             stdin: Some(stdin),
             events,
             alive,
+            requests: 0,
         })
     }
 
     pub fn is_alive(&self) -> bool {
         self.alive.load(Ordering::Relaxed)
+    }
+
+    pub fn interrupt(&mut self) -> Result<()> {
+        self.requests += 1;
+        let line = halt(self.requests);
+
+        let Some(stdin) = self.stdin.as_mut() else {
+            anyhow::bail!("the agent is no longer listening");
+        };
+        stdin.write_all(line.as_bytes())?;
+        stdin.flush()?;
+        Ok(())
     }
 
     pub fn say(&mut self, text: &str) -> Result<()> {

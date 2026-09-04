@@ -650,6 +650,7 @@ impl ApplicationHandler for App {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.pull_agent();
+        self.note_the_open_file();
 
         if self.session.view.agent.is_some() && self.agent.is_some() {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
@@ -719,7 +720,14 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
-                if self.session.view.settings.is_some() {
+                let over_the_agent = self
+                    .layout()
+                    .aside
+                    .is_some_and(|aside| aside.contains(self.cursor.0, self.cursor.1));
+
+                if over_the_agent && self.session.view.agent.is_some() {
+                    self.agent_scroll(delta);
+                } else if self.session.view.settings.is_some() {
                     self.settings_scroll(delta);
                 } else {
                     self.scroll(delta);
@@ -2314,7 +2322,13 @@ impl App {
             return;
         }
 
-        let text = state.draft.trim().to_string();
+        let mut text = state.draft.trim().to_string();
+        if let Some(file) = state.context.as_ref()
+            && !text.contains(file.as_str())
+        {
+            text = format!("Открыт файл {file}.\n\n{text}");
+        }
+
         let Some(agent) = self.agent.as_mut() else {
             return;
         };
@@ -2330,8 +2344,54 @@ impl App {
         if let Some(state) = self.session.view.agent.as_mut() {
             state.talk.asked(text);
             state.draft.clear();
+            state.scroll = 0;
         }
         self.request_redraw();
+    }
+
+    fn stop_the_agent(&mut self) {
+        let Some(agent) = self.agent.as_mut() else {
+            return;
+        };
+
+        if let Err(error) = agent.interrupt() {
+            tracing::warn!("could not interrupt the agent: {error}");
+        }
+
+        if let Some(state) = self.session.view.agent.as_mut() {
+            state.talk.note = Some("прерываю...".to_string());
+        }
+        self.request_redraw();
+    }
+
+    fn agent_scroll(&mut self, delta: MouseScrollDelta) {
+        let lines = match delta {
+            MouseScrollDelta::LineDelta(_, y) => y * WHEEL_LINES,
+            MouseScrollDelta::PixelDelta(position) => (position.y as f32) / 40.0,
+        };
+        let lines = lines.round() as isize;
+
+        if let Some(state) = self.session.view.agent.as_mut() {
+            let next = state.scroll as isize + lines;
+            state.scroll = next.max(0) as usize;
+        }
+        self.request_redraw();
+    }
+
+    fn note_the_open_file(&mut self) {
+        let open = self
+            .session
+            .view
+            .tabs
+            .iter()
+            .find(|tab| tab.active)
+            .map(|tab| tab.name.clone());
+
+        if let Some(state) = self.session.view.agent.as_mut()
+            && state.context != open
+        {
+            state.context = open;
+        }
     }
 
     fn pull_agent(&mut self) {
@@ -2354,18 +2414,20 @@ impl App {
     fn agent_press(&mut self, aside: Rect, x: f32, y: f32) {
         let placed = agent_view::layout(aside, self.theme.scale);
 
-        match agent_view::target_at(&placed, x, y) {
+        let Some(state) = self.session.view.agent.as_ref() else {
+            return;
+        };
+
+        match agent_view::target_at(&placed, state, x, y) {
             Some(agent_view::Target::Close) => self.toggle_agent(),
-            Some(agent_view::Target::Send) => {
-                self.send_to_agent();
-            }
+            Some(agent_view::Target::Send) => self.send_to_agent(),
+            Some(agent_view::Target::Stop) => self.stop_the_agent(),
             Some(agent_view::Target::Composer) | None => {
                 if let Some(state) = self.session.view.agent.as_mut() {
                     state.focused = true;
                 }
                 self.request_redraw();
             }
-            Some(agent_view::Target::Stop) => {}
         }
     }
 
