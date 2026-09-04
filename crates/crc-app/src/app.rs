@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -7,8 +8,8 @@ use crc_theme::{Density, Rgba, Theme};
 use crc_ui::geometry::Rect;
 use crc_ui::view::{
     self, Action, CodeMetrics, Edge, PaletteView, RecentEntry, TabHit, WelcomeView, WindowControl,
-    find as find_view, palette, panel as panel_view, rail, search as search_view,
-    settings as settings_view, tabs, welcome,
+    find as find_view, menu as menu_view, palette, panel as panel_view, prompt as prompt_view,
+    rail, search as search_view, settings as settings_view, tabs, welcome,
 };
 use crc_ui::{Shell, ShellState, TextRun, WindowRenderer};
 use winit::application::ApplicationHandler;
@@ -388,6 +389,15 @@ impl App {
         let (x, y) = self.cursor;
         let layout = self.layout();
 
+        if self.session.view.prompt.is_some() && self.prompt_press(x, y) {
+            return;
+        }
+
+        if self.session.view.menu.is_some() {
+            self.menu_press(x, y);
+            return;
+        }
+
         if self.session.view.find.is_some() && self.find_press(x, y) {
             return;
         }
@@ -522,8 +532,14 @@ impl App {
 
             if let Some(button) = view::explorer_button_at(sidebar, &metrics, x, y) {
                 match button {
-                    view::ExplorerButton::OpenFolder => self.pick_folder(),
-                    view::ExplorerButton::OpenFile => self.pick_file(),
+                    view::ExplorerButton::NewFolder => self.ask_for_a_name(
+                        prompt_view::PromptKind::NewFolder,
+                        self.session.root().to_path_buf(),
+                    ),
+                    view::ExplorerButton::NewFile => self.ask_for_a_name(
+                        prompt_view::PromptKind::NewFile,
+                        self.session.root().to_path_buf(),
+                    ),
                 }
                 return;
             }
@@ -678,6 +694,14 @@ impl ApplicationHandler for App {
                 }
                 self.request_redraw();
             }
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: MouseButton::Right,
+                ..
+            } => {
+                self.raise_menu();
+                self.request_redraw();
+            }
             WindowEvent::Resized(size) => {
                 let minimized = self
                     .window
@@ -706,7 +730,14 @@ impl ApplicationHandler for App {
                     },
                 ..
             } => {
-                if self.overlay_key(&logical_key, physical_key, event_loop) {
+                if self.session.view.prompt.is_some()
+                    && self.prompt_key(&logical_key, physical_key)
+                {
+                } else if self.session.view.menu.is_some()
+                    && matches!(logical_key, Key::Named(NamedKey::Escape))
+                {
+                    self.session.view.menu = None;
+                } else if self.overlay_key(&logical_key, physical_key, event_loop) {
                 } else if self.session.view.settings.is_some() {
                     self.settings_key(&logical_key, physical_key);
                 } else if self.session.view.palette.is_some() {
@@ -1748,6 +1779,269 @@ impl App {
         self.session
             .scroll_to(problem.line.saturating_sub(rows / 3));
         self.request_redraw();
+    }
+}
+
+
+impl App {
+    fn raise_menu(&mut self) {
+        let (x, y) = self.cursor;
+        let layout = self.layout();
+        let Some(sidebar) = layout.sidebar else {
+            return;
+        };
+        if !sidebar.contains(x, y) || self.session.view.search.is_some() {
+            return;
+        }
+
+        let metrics = self.theme.metrics();
+        let menu = match view::explorer_row(sidebar, &metrics, y)
+            .and_then(|row| self.session.row_path(row))
+        {
+            Some((path, is_dir)) => {
+                self.session.view.menu_subject = Some(path.clone());
+                menu_view::MenuView::for_row(path.to_string_lossy().into_owned(), is_dir)
+            }
+            None => {
+                self.session.view.menu_subject = None;
+                menu_view::MenuView::for_root()
+            }
+        };
+
+        self.session.view.menu = Some(menu.at(x, y));
+    }
+
+    fn menu_press(&mut self, x: f32, y: f32) {
+        let Some(state) = self.session.view.menu.as_ref() else {
+            return;
+        };
+        let placed = menu_view::layout(self.layout().window, state, self.theme.scale);
+        let chosen = menu_view::item_at(&placed, state, x, y).and_then(|index| state.action(index));
+
+        self.session.view.menu = None;
+        let Some(action) = chosen else {
+            self.request_redraw();
+            return;
+        };
+        self.run_menu(action);
+    }
+
+    fn run_menu(&mut self, action: menu_view::MenuAction) {
+        let subject = self.session.view.menu_subject.clone();
+        let root = self.session.root().to_path_buf();
+
+        match action {
+            menu_view::MenuAction::NewFile | menu_view::MenuAction::NewFolder => {
+                let parent = match subject {
+                    Some(path) => {
+                        let absolute = root.join(&path);
+                        if absolute.is_dir() {
+                            absolute
+                        } else {
+                            absolute.parent().map(Path::to_path_buf).unwrap_or(root)
+                        }
+                    }
+                    None => root,
+                };
+                let kind = if action == menu_view::MenuAction::NewFile {
+                    prompt_view::PromptKind::NewFile
+                } else {
+                    prompt_view::PromptKind::NewFolder
+                };
+                self.ask_for_a_name(kind, parent);
+            }
+            menu_view::MenuAction::Rename => {
+                let Some(path) = subject else { return };
+                let current = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                self.session.view.prompt = Some(prompt_view::PromptView::seeded(
+                    prompt_view::PromptKind::Rename,
+                    path.to_string_lossy().into_owned(),
+                    current,
+                ));
+                self.request_redraw();
+            }
+            menu_view::MenuAction::Delete => {
+                let Some(path) = subject else { return };
+                self.session.view.prompt = Some(prompt_view::PromptView::new(
+                    prompt_view::PromptKind::Delete,
+                    format!("{} уйдёт навсегда", path.to_string_lossy()),
+                ));
+                self.request_redraw();
+            }
+            menu_view::MenuAction::CopyPath => {
+                let Some(path) = subject else { return };
+                let full = root.join(&path).to_string_lossy().into_owned();
+                if let Some(clipboard) = self.clipboard()
+                    && let Err(error) = clipboard.set_text(full)
+                {
+                    tracing::warn!("clipboard would not take the path: {error}");
+                }
+            }
+            menu_view::MenuAction::Reveal => {
+                let target = match subject {
+                    Some(path) => root.join(path),
+                    None => root,
+                };
+                self.reveal_in_os(&target);
+            }
+            menu_view::MenuAction::Refresh => {
+                self.session.refresh_tree();
+                self.request_redraw();
+            }
+        }
+    }
+
+    fn reveal_in_os(&mut self, path: &Path) {
+        let shown = if cfg!(windows) {
+            std::process::Command::new("explorer")
+                .arg(format!("/select,{}", path.display()))
+                .spawn()
+        } else if cfg!(target_os = "macos") {
+            std::process::Command::new("open").arg("-R").arg(path).spawn()
+        } else {
+            std::process::Command::new("xdg-open")
+                .arg(path.parent().unwrap_or(path))
+                .spawn()
+        };
+
+        if let Err(error) = shown {
+            tracing::warn!("could not show {}: {error}", path.display());
+        }
+    }
+
+    fn ask_for_a_name(&mut self, kind: prompt_view::PromptKind, parent: PathBuf) {
+        let shown = parent
+            .strip_prefix(self.session.root())
+            .unwrap_or(&parent)
+            .to_string_lossy()
+            .into_owned();
+        let note = if shown.is_empty() {
+            "в корне проекта".to_string()
+        } else {
+            format!("в {shown}")
+        };
+
+        self.session.view.prompt_parent = Some(parent);
+        self.session.view.prompt = Some(prompt_view::PromptView::new(kind, note));
+        self.request_redraw();
+    }
+
+    fn prompt_press(&mut self, x: f32, y: f32) -> bool {
+        let Some(state) = self.session.view.prompt.as_ref() else {
+            return false;
+        };
+        let placed = prompt_view::layout(self.layout().window, state, self.theme.scale);
+
+        match prompt_view::target_at(&placed, x, y) {
+            Some(prompt_view::Target::Confirm) => self.settle_prompt(),
+            Some(prompt_view::Target::Cancel) | None => {
+                self.session.view.prompt = None;
+                self.request_redraw();
+            }
+            Some(prompt_view::Target::Field) => {}
+        }
+        true
+    }
+
+    fn prompt_key(&mut self, key: &Key, physical: PhysicalKey) -> bool {
+        let _ = physical;
+        match key {
+            Key::Named(NamedKey::Escape) => {
+                self.session.view.prompt = None;
+                self.request_redraw();
+                true
+            }
+            Key::Named(NamedKey::Enter) => {
+                self.settle_prompt();
+                true
+            }
+            Key::Named(NamedKey::Backspace) => {
+                if let Some(state) = self.session.view.prompt.as_mut() {
+                    state.value.pop();
+                    state.complaint = None;
+                }
+                self.request_redraw();
+                true
+            }
+            Key::Character(text) if !self.modifiers.control_key() && !self.modifiers.alt_key() => {
+                if let Some(state) = self.session.view.prompt.as_mut()
+                    && state.kind.asks_for_a_name()
+                {
+                    state.value.push_str(text);
+                    state.complaint = None;
+                }
+                self.request_redraw();
+                true
+            }
+            _ => true,
+        }
+    }
+
+    fn settle_prompt(&mut self) {
+        let Some(state) = self.session.view.prompt.as_ref() else {
+            return;
+        };
+        if !state.ready() {
+            if let Some(state) = self.session.view.prompt.as_mut() {
+                state.complaint = Some("такое имя не подойдёт".to_string());
+            }
+            self.request_redraw();
+            return;
+        }
+
+        let kind = state.kind;
+        let name = state.trimmed().to_string();
+        let root = self.session.root().to_path_buf();
+
+        let outcome = match kind {
+            prompt_view::PromptKind::NewFile | prompt_view::PromptKind::NewFolder => {
+                let parent = self
+                    .session
+                    .view
+                    .prompt_parent
+                    .clone()
+                    .unwrap_or_else(|| root.clone());
+                let target = parent.join(&name);
+                let relative = target.strip_prefix(&root).unwrap_or(&target).to_path_buf();
+
+                if kind == prompt_view::PromptKind::NewFile {
+                    self.session.make_file(&relative)
+                } else {
+                    self.session.make_dir(&relative)
+                }
+            }
+            prompt_view::PromptKind::Rename => {
+                let Some(from) = self.session.view.menu_subject.clone() else {
+                    return;
+                };
+                let to = from.parent().map(|dir| dir.join(&name)).unwrap_or_else(|| PathBuf::from(&name));
+                self.session.rename(&from, &to)
+            }
+            prompt_view::PromptKind::Delete => {
+                let Some(path) = self.session.view.menu_subject.clone() else {
+                    return;
+                };
+                self.session.remove(&path)
+            }
+        };
+
+        match outcome {
+            Ok(()) => {
+                self.session.view.prompt = None;
+                self.session.view.prompt_parent = None;
+                self.session.view.menu_subject = None;
+                self.request_redraw();
+            }
+            Err(error) => {
+                if let Some(state) = self.session.view.prompt.as_mut() {
+                    state.complaint = Some(format!("{error}"));
+                }
+                self.request_redraw();
+            }
+        }
     }
 }
 

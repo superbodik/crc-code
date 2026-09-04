@@ -29,7 +29,8 @@ pub fn tree(paths: &[PathBuf], limit: usize) -> Vec<FileEntry> {
             if entries.len() >= limit {
                 return entries;
             }
-            entries.push(FileEntry::dir(folder.clone(), depth));
+            let here: PathBuf = parents[..=depth].iter().collect();
+            entries.push(FileEntry::dir(folder.clone(), depth).at(here));
             open.push(folder.clone());
         }
 

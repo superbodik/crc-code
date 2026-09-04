@@ -12,7 +12,9 @@ use crate::view::tabs;
 use crate::icon;
 use crate::view::find as find_view;
 use crate::view::hit;
+use crate::view::menu as menu_view;
 use crate::view::panel as panel_view;
+use crate::view::prompt as prompt_view;
 use crate::view::rail as rail_view;
 use crate::view::search as search_view;
 use crate::view::settings as settings_view;
@@ -27,6 +29,8 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
         welcome_screen(&mut frame, layout, theme, view);
         settings_panel(&mut frame, layout, theme, view);
         command_palette(&mut frame, layout, theme, view);
+        context_menu(&mut frame, layout, theme, view);
+        name_prompt(&mut frame, layout, theme, view);
         return frame;
     }
 
@@ -42,6 +46,8 @@ pub fn draw(layout: &Shell, theme: &Theme, view: &EditorView, metrics: CodeMetri
     find_bar(&mut frame, layout, theme, view);
     settings_panel(&mut frame, layout, theme, view);
     command_palette(&mut frame, layout, theme, view);
+    context_menu(&mut frame, layout, theme, view);
+    name_prompt(&mut frame, layout, theme, view);
 
     frame
 }
@@ -247,7 +253,7 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
         }
 
         let indent = metrics.panel_padding + entry.depth as f32 * 12.0;
-        let marker = Rect::new(row.x + indent - 2.0, row.y, 16.0, row.height);
+        let marker = Rect::new(row.x + indent, row.y, 16.0, row.height);
         frame.text(TextRun::icon(
             if entry.is_dir {
                 icon::FOLDER
@@ -255,7 +261,7 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
                 icon::for_name(&entry.name)
             },
             marker,
-            13.0,
+            14.0,
             if entry.is_dir {
                 theme.chrome.text_muted
             } else if entry.modified {
@@ -266,9 +272,9 @@ fn sidebar(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) 
         ));
 
         let text = Rect::new(
-            row.x + indent + 14.0,
+            row.x + indent + 22.0,
             row.y,
-            row.width - indent - 20.0,
+            row.width - indent - 28.0,
             row.height,
         );
         frame.text(
@@ -1736,5 +1742,200 @@ fn search_panel(frame: &mut Frame, sidebar: Rect, theme: &Theme, view: &EditorVi
                 );
             }
         }
+    }
+}
+
+fn context_menu(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.menu.as_ref() else {
+        return;
+    };
+
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+    let placed = menu_view::layout(layout.window, state, theme.scale);
+
+    frame.overlay_quad(
+        Quad::filled(placed.panel, theme.chrome.raised)
+            .rounded(metrics.corner_radius)
+            .bordered(metrics.border_width, theme.chrome.border),
+    );
+
+    for (index, item) in state.items.iter().enumerate() {
+        let rect = placed.rows[index];
+
+        match item {
+            menu_view::MenuItem::Separator => {
+                frame.overlay_quad(Quad::filled(
+                    Rect::new(
+                        rect.x + 10.0 * theme.scale,
+                        rect.y + rect.height / 2.0,
+                        rect.width - 20.0 * theme.scale,
+                        1.0,
+                    ),
+                    theme.chrome.border,
+                ));
+            }
+            menu_view::MenuItem::Action(action) => {
+                let hovered = state.hovered == Some(index);
+                if hovered {
+                    frame.overlay_quad(
+                        Quad::filled(
+                            rect.inset_by(4.0 * theme.scale, 1.0),
+                            theme.chrome.hover,
+                        )
+                        .rounded(metrics.corner_radius_small),
+                    );
+                }
+
+                let tint = if action.destructive() {
+                    theme.chrome.danger
+                } else if hovered {
+                    theme.chrome.text_strong
+                } else {
+                    theme.chrome.text
+                };
+
+                frame.overlay_text(TextRun::icon(
+                    action.glyph(),
+                    Rect::new(rect.x + 12.0 * theme.scale, rect.y, 16.0, rect.height),
+                    12.0,
+                    tint,
+                ));
+                frame.overlay_text(
+                    TextRun::new(
+                        action.title(),
+                        Rect::new(
+                            rect.x + 36.0 * theme.scale,
+                            rect.y,
+                            rect.width - 44.0 * theme.scale,
+                            rect.height,
+                        ),
+                        type_scale.body,
+                        tint,
+                    )
+                    .line_height(rect.height),
+                );
+            }
+        }
+    }
+}
+
+fn name_prompt(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorView) {
+    let Some(state) = view.prompt.as_ref() else {
+        return;
+    };
+
+    let metrics = theme.metrics();
+    let type_scale = theme.type_scale;
+    let placed = prompt_view::layout(layout.window, state, theme.scale);
+
+    frame.overlay_quad(Quad::filled(
+        layout.window,
+        theme.chrome.backdrop.with_alpha(150),
+    ));
+    frame.overlay_quad(
+        Quad::filled(placed.panel, theme.chrome.raised)
+            .rounded(metrics.corner_radius)
+            .bordered(metrics.border_width, theme.chrome.border),
+    );
+
+    frame.overlay_text(
+        TextRun::new(
+            state.kind.title(),
+            placed.title,
+            type_scale.large,
+            theme.chrome.text_strong,
+        )
+        .weight(Weight::Semibold)
+        .line_height(placed.title.height),
+    );
+    frame.overlay_text(
+        TextRun::new(
+            state.complaint.clone().unwrap_or_else(|| state.note.clone()),
+            placed.note,
+            type_scale.small,
+            if state.complaint.is_some() {
+                theme.chrome.danger
+            } else {
+                theme.chrome.text_faint
+            },
+        )
+        .line_height(placed.note.height),
+    );
+
+    if state.kind.asks_for_a_name() {
+        frame.overlay_quad(
+            Quad::filled(placed.field, theme.chrome.surface)
+                .rounded(metrics.corner_radius_small)
+                .bordered(metrics.border_width, theme.chrome.accent),
+        );
+
+        let empty = state.value.is_empty();
+        frame.overlay_text(
+            TextRun::new(
+                if empty {
+                    "имя".to_string()
+                } else {
+                    state.value.clone()
+                },
+                placed.field.inset_by(12.0 * theme.scale, 0.0),
+                type_scale.body,
+                if empty {
+                    theme.chrome.text_faint
+                } else {
+                    theme.chrome.text_strong
+                },
+            )
+            .line_height(placed.field.height),
+        );
+    }
+
+    for (target, rect) in [
+        (prompt_view::Target::Cancel, placed.cancel),
+        (prompt_view::Target::Confirm, placed.confirm),
+    ] {
+        let primary = target == prompt_view::Target::Confirm;
+        let live = !primary || state.ready();
+        let hovered = state.hovered == Some(target);
+
+        let fill = if primary && live {
+            if state.kind.destructive() {
+                theme.chrome.danger
+            } else if hovered {
+                theme.chrome.accent_hover
+            } else {
+                theme.chrome.accent_solid
+            }
+        } else if hovered {
+            theme.chrome.hover
+        } else {
+            theme.chrome.panel
+        };
+
+        frame.overlay_quad(
+            Quad::filled(rect, fill)
+                .rounded(metrics.corner_radius_small)
+                .bordered(metrics.border_width, theme.chrome.border),
+        );
+        frame.overlay_text(
+            TextRun::new(
+                if primary {
+                    state.kind.confirm()
+                } else {
+                    "Отмена"
+                },
+                rect,
+                type_scale.body,
+                if primary && live {
+                    theme.chrome.text_on_accent
+                } else if live {
+                    theme.chrome.text
+                } else {
+                    theme.chrome.text_faint
+                },
+            )
+            .align(TextAlign::Center)
+            .line_height(rect.height),
+        );
     }
 }

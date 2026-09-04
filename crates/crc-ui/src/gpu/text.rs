@@ -90,7 +90,7 @@ impl TextRun {
         Self {
             font: FontKind::Icon,
             align: TextAlign::Center,
-            line_height: size,
+            line_height: rect.height.max(size),
             ..Self::new(glyph.to_string(), rect, size, color)
         }
     }

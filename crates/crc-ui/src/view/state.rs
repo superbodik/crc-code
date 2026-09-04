@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use crc_theme::Highlight;
 
 use crate::view::controls::WindowControl;
+use crate::view::menu::MenuView;
 use crate::view::palette::PaletteView;
+use crate::view::prompt::PromptView;
 use crate::view::panel::PanelView;
 use crate::view::find::FindView;
 use crate::view::hit::ExplorerButton;
@@ -112,6 +114,10 @@ pub struct EditorView {
     pub find: Option<FindView>,
     pub search: Option<SearchView>,
     pub panel: PanelView,
+    pub menu: Option<MenuView>,
+    pub prompt: Option<PromptView>,
+    pub menu_subject: Option<PathBuf>,
+    pub prompt_parent: Option<PathBuf>,
     pub matches: Vec<Range<usize>>,
     pub current_match: Option<usize>,
     pub hovered_rail: Option<RailAction>,

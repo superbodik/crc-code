@@ -333,6 +333,45 @@ impl Session {
         }
     }
 
+    pub fn make_file(&mut self, path: &Path) -> anyhow::Result<()> {
+        self.runtime
+            .block_on(self.engine.write_file(path, String::new(), None))?;
+        self.load_tree();
+        Ok(())
+    }
+
+    pub fn make_dir(&mut self, path: &Path) -> anyhow::Result<()> {
+        self.runtime.block_on(self.engine.create_dir(path))?;
+        self.load_tree();
+        Ok(())
+    }
+
+    pub fn rename(&mut self, from: &Path, to: &Path) -> anyhow::Result<()> {
+        self.runtime.block_on(self.engine.rename(from, to))?;
+        self.documents.close_path(from);
+        self.load_tree();
+        self.sync();
+        Ok(())
+    }
+
+    pub fn remove(&mut self, path: &Path) -> anyhow::Result<()> {
+        self.runtime.block_on(self.engine.remove(path))?;
+        self.documents.close_path(path);
+        self.load_tree();
+        self.sync();
+        Ok(())
+    }
+
+    pub fn refresh_tree(&mut self) {
+        self.load_tree();
+        self.sync();
+    }
+
+    pub fn row_path(&self, row: usize) -> Option<(PathBuf, bool)> {
+        let entry = self.view.files.get(row)?;
+        Some((entry.path.clone()?, entry.is_dir))
+    }
+
     pub fn scroll_to(&mut self, line: usize) {
         let last = self.view.line_count().saturating_sub(1);
         self.view.scroll_line = line.min(last);

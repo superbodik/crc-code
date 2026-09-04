@@ -37,6 +37,16 @@ impl Documents {
         self.open.iter()
     }
 
+    pub fn close_path(&mut self, path: &std::path::Path) -> bool {
+        match self.index_of(path) {
+            Some(index) => {
+                self.close(index);
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn get(&self, index: usize) -> Option<&Document> {
         self.open.get(index)
     }

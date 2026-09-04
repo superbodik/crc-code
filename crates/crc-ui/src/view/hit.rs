@@ -38,24 +38,24 @@ pub fn explorer_row(sidebar: Rect, metrics: &Metrics, y: f32) -> Option<usize> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExplorerButton {
-    OpenFolder,
-    OpenFile,
+    NewFolder,
+    NewFile,
 }
 
 impl ExplorerButton {
-    pub const ALL: [ExplorerButton; 2] = [ExplorerButton::OpenFile, ExplorerButton::OpenFolder];
+    pub const ALL: [ExplorerButton; 2] = [ExplorerButton::NewFolder, ExplorerButton::NewFile];
 
     pub const fn glyph(self) -> char {
         match self {
-            ExplorerButton::OpenFolder => crate::icon::OPEN_FOLDER,
-            ExplorerButton::OpenFile => crate::icon::OPEN_FILE,
+            ExplorerButton::NewFolder => crate::icon::NEW_FOLDER,
+            ExplorerButton::NewFile => crate::icon::NEW_FILE,
         }
     }
 
     pub const fn title(self) -> &'static str {
         match self {
-            ExplorerButton::OpenFolder => "Открыть папку проекта",
-            ExplorerButton::OpenFile => "Открыть файл",
+            ExplorerButton::NewFolder => "Новая папка",
+            ExplorerButton::NewFile => "Новый файл",
         }
     }
 }

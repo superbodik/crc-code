@@ -96,17 +96,33 @@ fn every_file_carries_the_path_that_opens_it() {
     let entries = tree(&paths(&["src/main.rs", "Cargo.toml"]), 50);
 
     for entry in &entries {
-        if entry.is_dir {
-            assert!(entry.path.is_none(), "a folder opens nothing");
-        } else {
-            assert!(entry.path.is_some(), "{} has no path", entry.name);
-        }
+        assert!(
+            entry.path.is_some(),
+            "{} has no path, so nothing can act on it",
+            entry.name
+        );
     }
 
     let main = entries.iter().find(|e| e.name == "main.rs").unwrap();
     assert_eq!(
         main.path.as_deref(),
         Some(PathBuf::from("src/main.rs").as_path())
+    );
+}
+
+#[test]
+fn a_folder_carries_its_own_path_so_it_can_be_acted_on() {
+    let entries = tree(&paths(&["src/view/shell.rs", "src/main.rs"]), 50);
+
+    let src = entries.iter().find(|e| e.name == "src").unwrap();
+    let view = entries.iter().find(|e| e.name == "view").unwrap();
+
+    assert!(src.is_dir && view.is_dir);
+    assert_eq!(src.path.as_deref(), Some(PathBuf::from("src").as_path()));
+    assert_eq!(
+        view.path.as_deref(),
+        Some(PathBuf::from("src/view").as_path()),
+        "a nested folder knows the whole way down to it"
     );
 }
 
