@@ -482,6 +482,7 @@ dependencies = [
  "crc-ui",
  "png",
  "rfd",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

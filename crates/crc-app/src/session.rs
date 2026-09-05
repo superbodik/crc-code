@@ -8,6 +8,7 @@ use crc_ui::view::{EditorView, Tab};
 pub struct Session {
     runtime: tokio::runtime::Runtime,
     engine: Arc<Engine>,
+    watching: tokio::sync::broadcast::Receiver<crc_core::Event>,
     documents: Documents,
     files: Vec<PathBuf>,
     pub view: EditorView,
@@ -26,9 +27,12 @@ impl Session {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "workspace".to_string());
 
+        let watching = engine.subscribe();
+
         let mut session = Self {
             runtime,
             engine,
+            watching,
             documents: Documents::new(),
             files: Vec::new(),
             view: EditorView {
@@ -296,6 +300,63 @@ impl Session {
                 Vec::new()
             }
         }
+    }
+
+    pub fn reload_from_disk(&mut self) -> Vec<String> {
+        let mut touched = Vec::new();
+        let mut changed = Vec::new();
+
+        loop {
+            match self.watching.try_recv() {
+                Ok(crc_core::Event::FileChanged { path, change }) => changed.push((path, change)),
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+
+        for (path, change) in changed {
+            let relative = path
+                .strip_prefix(self.root())
+                .map(Path::to_path_buf)
+                .unwrap_or(path);
+
+            if change == crc_core::Change::Removed {
+                if self.documents.close_path(&relative) {
+                    touched.push(relative.to_string_lossy().into_owned());
+                }
+                continue;
+            }
+
+            let Some(index) = self.documents.index_of(&relative) else {
+                continue;
+            };
+            if self
+                .documents
+                .get(index)
+                .is_some_and(|document| document.is_dirty())
+            {
+                continue;
+            }
+
+            let Ok(fresh) = self.runtime.block_on(self.engine.read_file(&relative)) else {
+                continue;
+            };
+            let Some(document) = self.documents.get_mut(index) else {
+                continue;
+            };
+            if document.text() == fresh.text {
+                continue;
+            }
+
+            document.reload(fresh.text);
+            touched.push(relative.to_string_lossy().into_owned());
+        }
+
+        if !touched.is_empty() {
+            self.load_tree();
+            self.sync();
+        }
+        touched
     }
 
     pub fn refresh_problems(&mut self) {

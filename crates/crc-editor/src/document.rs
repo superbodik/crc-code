@@ -76,6 +76,21 @@ impl Document {
         self.buffer.version() != self.saved_version
     }
 
+    pub fn reload(&mut self, text: String) {
+        let cursor = self.selection.head.min(text.chars().count());
+
+        self.buffer = Buffer::from_text(&text);
+        self.text = text;
+        self.selection = Selection::cursor(cursor);
+        self.goal_column = None;
+        self.saved_version = self.buffer.version();
+
+        if let Some(tree) = self.tree.as_mut() {
+            tree.reset();
+            let _ = tree.parse(&self.text);
+        }
+    }
+
     pub fn mark_saved(&mut self) {
         self.saved_version = self.buffer.version();
         self.buffer.commit();

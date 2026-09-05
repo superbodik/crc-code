@@ -661,6 +661,11 @@ impl ApplicationHandler for App {
         self.pull_warden();
         self.note_the_open_file();
 
+        for file in self.session.reload_from_disk() {
+            self.session.say(format!("перечитан с диска: {file}"));
+            self.request_redraw();
+        }
+
         if self.session.view.agent.is_some() && self.agent.is_some() {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
                 Instant::now() + Duration::from_millis(60),
@@ -677,7 +682,9 @@ impl ApplicationHandler for App {
                 Instant::now() + Duration::from_millis(33),
             ));
         } else {
-            event_loop.set_control_flow(ControlFlow::Wait);
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                Instant::now() + Duration::from_millis(250),
+            ));
         }
 
         let Some(last) = self.last_edit else {
@@ -2399,14 +2406,65 @@ impl App {
             return;
         };
 
+        let changes = self.changes_of(&request);
+
         self.session.view.review = Some(crc_ui::view::review::ReviewView {
             tool: request.tool.clone(),
             file: request.file(),
-            detail: crc_ui::view::review::describe(&request.input),
+            detail: if changes.is_empty() {
+                crc_ui::view::review::describe(&request.input)
+            } else {
+                Vec::new()
+            },
+            changes,
             hovered: None,
         });
         self.asking = Some(request);
         self.request_redraw();
+    }
+
+    fn changes_of(&self, request: &crc_agent::Request) -> Vec<crc_text::diff::Line> {
+        let field = |name: &str| {
+            request
+                .input
+                .get(name)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        let (before, after) = match request.tool.as_str() {
+            "Edit" => (field("old_string"), field("new_string")),
+            "Write" => {
+                let after = field("content");
+                if after.is_empty() {
+                    return Vec::new();
+                }
+                (self.file_as_it_stands(request), after)
+            }
+            _ => return Vec::new(),
+        };
+
+        if before.is_empty() && after.is_empty() {
+            return Vec::new();
+        }
+
+        crc_text::diff::around(crc_text::diff::lines(&before, &after), 3)
+    }
+
+    fn file_as_it_stands(&self, request: &crc_agent::Request) -> String {
+        let Some(named) = request.file() else {
+            return String::new();
+        };
+
+        let path = std::path::Path::new(&named);
+        let full = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.session.root().join(path)
+        };
+
+        std::fs::read_to_string(full).unwrap_or_default()
     }
 
     fn settle_review(&mut self, allow: bool) {

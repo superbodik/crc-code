@@ -2331,26 +2331,76 @@ fn review_panel(frame: &mut Frame, layout: &Shell, theme: &Theme, view: &EditorV
         .line_height(placed.subject.height),
     );
 
-    for (index, rect) in placed.rows.iter().enumerate() {
-        let Some(line) = state.detail.get(index) else {
-            break;
-        };
-
-        let heading = !line.starts_with("  ");
+    if let Some(tally) = state.tally() {
         frame.overlay_text(
             TextRun::new(
-                line.clone(),
-                *rect,
+                tally,
+                placed.subject,
                 type_scale.small,
-                if heading {
-                    theme.chrome.text_muted
-                } else {
-                    theme.chrome.text
-                },
+                theme.chrome.text_muted,
             )
             .mono()
-            .line_height(rect.height),
+            .align(TextAlign::End)
+            .line_height(placed.subject.height),
         );
+    }
+
+    if state.changes.is_empty() {
+        for (index, rect) in placed.rows.iter().enumerate() {
+            let Some(line) = state.detail.get(index) else {
+                break;
+            };
+
+            let heading = !line.starts_with("  ");
+            frame.overlay_text(
+                TextRun::new(
+                    line.clone(),
+                    *rect,
+                    type_scale.small,
+                    if heading {
+                        theme.chrome.text_muted
+                    } else {
+                        theme.chrome.text
+                    },
+                )
+                .mono()
+                .line_height(rect.height),
+            );
+        }
+    } else {
+        for (index, rect) in placed.rows.iter().enumerate() {
+            let Some(change) = state.changes.get(index) else {
+                break;
+            };
+
+            let (background, ink) = match change {
+                crc_text::diff::Line::Added { .. } => {
+                    (Some(theme.diff.added_background), theme.diff.added_text)
+                }
+                crc_text::diff::Line::Removed { .. } => {
+                    (Some(theme.diff.removed_background), theme.diff.removed_text)
+                }
+                crc_text::diff::Line::Skipped(_) => (None, theme.chrome.text_faint),
+                crc_text::diff::Line::Same { .. } => (None, theme.chrome.text_muted),
+            };
+
+            if let Some(fill) = background {
+                frame.overlay_quad(Quad::filled(*rect, fill));
+            }
+
+            let text = match change {
+                crc_text::diff::Line::Skipped(count) => {
+                    format!("      \u{22ef} {count} \u{0441}\u{0442}\u{0440}\u{043e}\u{043a}")
+                }
+                other => format!("{} {}", other.marker(), review_view::cut(other.text(), 88)),
+            };
+
+            frame.overlay_text(
+                TextRun::new(text, rect.inset_by(6.0, 0.0), type_scale.small, ink)
+                    .mono()
+                    .line_height(rect.height),
+            );
+        }
     }
 
     for (target, rect) in [

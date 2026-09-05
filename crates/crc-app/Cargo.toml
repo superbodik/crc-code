@@ -23,10 +23,11 @@ crc-core = { path = "../crc-core" }
 crc-editor = { path = "../crc-editor" }
 crc-syntax = { path = "../crc-syntax" }
 crc-term = { version = "0.1.0", path = "../crc-term" }
-crc-text = { path = "../crc-text" }
+crc-text = { version = "0.1.0", path = "../crc-text" }
 crc-theme = { path = "../crc-theme" }
 crc-ui = { path = "../crc-ui" }
 rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "tokio"] }
+serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

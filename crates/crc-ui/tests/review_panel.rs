@@ -11,6 +11,7 @@ fn view(tool: &str, file: Option<&str>, detail: Vec<&str>) -> ReviewView {
         tool: tool.to_string(),
         file: file.map(str::to_string),
         detail: detail.into_iter().map(str::to_string).collect(),
+        changes: Vec::new(),
         hovered: None,
     }
 }
@@ -207,5 +208,90 @@ mod naming_a_long_path {
         let state = view("Write", Some(&deep), vec![]);
 
         assert!(state.subject().ends_with("deep.rs"));
+    }
+}
+
+mod showing_a_diff {
+    use super::*;
+    use crc_text::diff::{Line, around, lines};
+
+    fn diffed(before: &str, after: &str) -> ReviewView {
+        ReviewView {
+            tool: "Edit".to_string(),
+            file: Some("src/main.rs".to_string()),
+            detail: Vec::new(),
+            changes: around(lines(before, after), 3),
+            hovered: None,
+        }
+    }
+
+    #[test]
+    fn a_diff_is_counted_and_the_count_is_shown() {
+        let state = diffed("one\ntwo\nthree", "one\nTWO\nthree");
+
+        assert_eq!(state.tally().as_deref(), Some("+1 \u{2212}1"));
+    }
+
+    #[test]
+    fn a_panel_with_no_diff_offers_no_count() {
+        let plain = ReviewView {
+            tool: "Bash".to_string(),
+            file: None,
+            detail: vec!["command:".to_string(), "  ls".to_string()],
+            changes: Vec::new(),
+            hovered: None,
+        };
+
+        assert_eq!(plain.tally(), None);
+        assert_eq!(plain.rows(), 2, "it falls back to the plain description");
+    }
+
+    #[test]
+    fn the_rows_follow_whichever_the_panel_is_showing() {
+        let state = diffed("one\ntwo", "one\nTWO");
+
+        assert_eq!(state.rows(), state.changes.len());
+        assert!(state.rows() > 0);
+    }
+
+    #[test]
+    fn a_bigger_diff_makes_a_taller_panel() {
+        let short = diffed("one", "ONE");
+        let long = diffed(
+            &(0..30).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n"),
+            &(0..30).map(|i| format!("other {i}")).collect::<Vec<_>>().join("\n"),
+        );
+
+        let small = review::layout(window(), &short, 1.0);
+        let big = review::layout(window(), &long, 1.0);
+
+        assert!(big.panel.height > small.panel.height);
+    }
+
+    #[test]
+    fn a_diff_of_hundreds_of_lines_still_fits_on_the_screen() {
+        let before = (0..500).map(|i| format!("a {i}")).collect::<Vec<_>>().join("\n");
+        let after = (0..500).map(|i| format!("b {i}")).collect::<Vec<_>>().join("\n");
+        let state = diffed(&before, &after);
+
+        let placed = review::layout(window(), &state, 1.0);
+
+        assert!(placed.panel.bottom() <= window().bottom());
+        assert!(placed.rows.len() < state.changes.len());
+        assert!(placed.rows.last().unwrap().bottom() <= placed.body.bottom() + 0.01);
+    }
+
+    #[test]
+    fn a_gap_in_the_diff_is_carried_as_its_own_line() {
+        let before = (0..40).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let mut after: Vec<String> = before.lines().map(str::to_string).collect();
+        after[20] = "changed".to_string();
+
+        let state = diffed(&before, &after.join("\n"));
+
+        assert!(
+            state.changes.iter().any(|line| matches!(line, Line::Skipped(_))),
+            "the untouched stretch should be marked, not printed"
+        );
     }
 }

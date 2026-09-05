@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 crc-theme = { path = "../crc-theme" }
-crc-text = { path = "../crc-text" }
+crc-text = { version = "0.1.0", path = "../crc-text" }
 crc-syntax = { path = "../crc-syntax" }
 thiserror.workspace = true
 tracing.workspace = true

@@ -1,3 +1,4 @@
+use crc_text::diff::{self, Line};
 use serde_json::Value;
 
 use crate::geometry::Rect;
@@ -13,6 +14,7 @@ pub struct ReviewView {
     pub tool: String,
     pub file: Option<String>,
     pub detail: Vec<String>,
+    pub changes: Vec<Line>,
     pub hovered: Option<Target>,
 }
 
@@ -25,6 +27,22 @@ impl ReviewView {
             "Bash" | "PowerShell" => "Выполнить команду".to_string(),
             other => format!("Разрешить {other}"),
         }
+    }
+
+    pub fn rows(&self) -> usize {
+        if self.changes.is_empty() {
+            self.detail.len()
+        } else {
+            self.changes.len()
+        }
+    }
+
+    pub fn tally(&self) -> Option<String> {
+        if self.changes.is_empty() {
+            return None;
+        }
+        let (added, removed) = diff::tally(&self.changes);
+        Some(format!("+{added} \u{2212}{removed}"))
     }
 
     pub fn subject(&self) -> String {
@@ -83,7 +101,7 @@ pub fn tail(path: &str, limit: usize) -> String {
     format!("...{kept}")
 }
 
-fn cut(line: &str, limit: usize) -> String {
+pub fn cut(line: &str, limit: usize) -> String {
     if line.chars().count() <= limit {
         return line.to_string();
     }
@@ -113,7 +131,7 @@ pub fn layout(window: Rect, view: &ReviewView, scale: f32) -> Layout {
     let scale = scale.max(0.5);
     let width = (WIDTH * scale).min(window.width - 60.0 * scale);
 
-    let lines = view.detail.len().min(20) as f32;
+    let lines = view.rows().min(24) as f32;
     let height = ((HEADER + FOOTER) * scale + lines * ROW * scale + PADDING * scale)
         .min(window.height - 60.0 * scale);
 
@@ -138,7 +156,7 @@ pub fn layout(window: Rect, view: &ReviewView, scale: f32) -> Layout {
     let fits = (body.height / (ROW * scale)).floor().max(0.0) as usize;
     let mut rows = Vec::new();
     let mut y = body.y;
-    for _ in 0..view.detail.len().min(fits) {
+    for _ in 0..view.rows().min(fits) {
         rows.push(Rect::new(body.x, y, body.width, ROW * scale));
         y += ROW * scale;
     }
